@@ -1292,6 +1292,7 @@ else
 fi])
 need_lib_prefix=unknown
 hardcode_into_libs=no
+echo="$ECHO"
 
 # when you set need_version to no, make sure it does not cause -set_version
 # flags to be left without arguments
