@@ -1,0 +1,17 @@
+*.a
+*.o
+.deps
+Makefile
+autom4te.cache/
+config.h
+config.log
+config.status
+libtool
+man/Makefile
+psfex.spec
+src/Makefile
+src/fits/Makefile
+src/levmar/Makefile
+src/psfex
+src/wcs/Makefile
+stamp-h1
