@@ -152,7 +152,7 @@ typedef struct
   double	time_diff;			/* Execution time */
   }	prefstruct;
 
-  prefstruct		prefs;
+extern prefstruct prefs;
 
 /*-------------------------------- protos -----------------------------------*/
 extern char	*list_to_str(char *listname);
