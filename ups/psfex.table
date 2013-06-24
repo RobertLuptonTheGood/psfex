@@ -1,6 +1,7 @@
 setupRequired(base)
 setupRequired(atlas)
 setupRequired(fftwf)
+setupRequired(pyfits)
 
 envPrepend(PATH, ${PRODUCT_DIR}/bin)
 

@@ -2,7 +2,7 @@
 import os
 from lsst.sconsUtils import scripts, targets, env
 
-sourceFiles = ["context.c", "misc.c", "poly.c", "psf.c", "utils.c", "vignet.c",]
+sourceFiles = ["context.c", "misc.c", "poly.c", "prefs.c", "psf.c", "utils.c", "vignet.c",]
 
 objs = env.SourcesForSharedLibrary([os.path.join("#src", f) for f in sourceFiles])
 

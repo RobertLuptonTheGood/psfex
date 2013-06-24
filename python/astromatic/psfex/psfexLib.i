@@ -16,6 +16,8 @@ Python interface to psfex classes
 #include "psf.hh"
 %}
 
+%import "lsst/daf/base/baseLib.i"
+
 %template(vectorF) std::vector<float>;
 %template(vectorI) std::vector<int>;
 %template(vectorStr) std::vector<std::string>;
