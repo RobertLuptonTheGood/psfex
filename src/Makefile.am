@@ -35,7 +35,7 @@ endif
 bin_PROGRAMS		= psfex
 psfex_SOURCES		= check.c context.c $(CPLOTSOURCE) diagnostic.c fft.c \
 			  field.c fitswcs.c homo.c main.c makeit.c misc.c \
-			  pca.c poly.c prefs.c psf.c sample.c vignet.c xml.c \
+			  pca.c poly.c prefs.c psf.c psf_io.c sample.c vignet.c xml.c \
 			  check.h context.h cplot.h define.h diagnostic.h \
 			  fft.h field.h fitswcs.h globals.h homo.h key.h \
 			  misc.h pca.h poly.h prefs.h preflist.h psf.h \

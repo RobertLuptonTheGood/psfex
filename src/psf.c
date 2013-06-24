@@ -1273,7 +1273,16 @@ void	psf_makebasis(psfstruct *psf, setstruct *set,
 		nvec, sqrt(nvec+1.0)*prefs.basis_scale);
       break;
     case BASIS_FILE:
+#if defined(PYTHON_PSFEX) && PYTHON_PSFEX
+      //
+      // Nothing fundamental, but we don't want to do I/O in C.  So some refactoring would
+      // be needed to support this mode
+      //
+      error(EXIT_FAILURE, "BASIS_FILE is not supported by the psfex python bindings",
+			"psf_makebasis()");
+#else
       psf->nbasis = psf_readbasis(psf, prefs.basis_name, 0);
+#endif
       break;
     default:
       error(EXIT_FAILURE, "*Internal Error*: unknown PSF vector basis in ",
@@ -1437,68 +1446,3 @@ int psf_pshapelet(float **basis, int w, int h, int nmax, double beta)
 
   return kmax;
   }
-
-
-/****** psf_readbasis *********************************************************
-PROTO   int psf_readbasis(psfstruct *psf, char *filename, int ext)
-PURPOSE Read a set of basis functions for the PSF from a 3D FITS-file.
-INPUT   Pointer to the PSF structure,
-	FITS filename,
-	Extension number.
-OUTPUT  Number of basis vectors read.
-NOTES   The maximum degrees and number of dimensions allowed are set in poly.h.
-AUTHOR  E. Bertin (IAP)
-VERSION 13/11/2007
- ***/
-int	psf_readbasis(psfstruct *psf, char *filename, int ext)
-  {
-   catstruct	*cat;
-   tabstruct	*tab, *firstab;
-   PIXTYPE	*pixin;
-   int		n, next, extp1, ntabp1, npixin,npixout,ncomp;
-
-/*-- Read input FITS file */
-  if (!(cat = read_cat(filename)))
-    error(EXIT_FAILURE, "*Error*: No such catalog: ", filename);
-/* Go to the right extension */
-  tab = cat->tab;
-  ntabp1 = cat->ntab+1;
-  firstab = NULL;
-  extp1 = ext+1;
-  for (next=0; ntabp1-- && next<extp1; tab = tab->nexttab)
-    if (tab->naxis>=2)
-      {
-      if (!next)
-        firstab = tab;
-      next++;
-      }
-  if (!ntabp1)
-    {
-    if (!next)
-      error(EXIT_FAILURE, "No image data in ", filename);
-    if (next>extp1)
-      warning("Not enough extensions, using only 1st datacube of ",
-		filename);
-    }
-
-  tab = tab->prevtab;
-  npixin = tab->naxisn[0]*tab->naxisn[1];
-  npixout = psf->size[0]*psf->size[1];
-  QMALLOC(pixin, PIXTYPE, npixin);
-  ncomp = tab->tabsize/tab->bytepix/npixin;
-  QMALLOC(psf->basis, float, ncomp*npixout);
-  QFSEEK(tab->cat->file, tab->bodypos, SEEK_SET, tab->cat->filename);
-  for (n=0; n<ncomp; n++)
-    {
-    read_body(tab, pixin, npixin);
-    vignet_copy(pixin, tab->naxisn[0], tab->naxisn[1],
-		&psf->basis[n*npixout], psf->size[0], psf->size[1], 0, 0,
-		VIGNET_CPY);
-    }
-  free(pixin);
-  free_cat(&cat, 1);
-
-  return ncomp;
-  }
-
-

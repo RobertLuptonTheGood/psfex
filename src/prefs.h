@@ -60,7 +60,7 @@ typedef struct
   char		**command_line;			/* Command line */
   int		ncommand_line;			/* nb of params */
   char		prefs_name[MAXCHAR];		/* prefs filename */
-  char		*(incat_name[MAXFILE]);		/* Filename(s) of input cats */
+  char		*incat_name[MAXFILE];		/* Filename(s) of input cats */
   int		ncat;				/* Number of input images */
   char		psf_dir[MAXCHAR];		/* PSF output dir */
   char		psf_suffix[MAXCHAR];		/* Suffix for PSF filenames */
@@ -93,19 +93,19 @@ typedef struct
   char		basis_name[MAXCHAR];		/* PSF vector basis filename */
   double	basis_scale;			/* Gauss-Laguerre beta param */
 /* Re-centering */
-  char		*(center_key[2]);		/* Names of centering keys */
+  char		*center_key[2];                 /* Names of centering keys */
   int		ncenter_key;			/* nb of params */
   int		autoselect_flag;		/* Auto. select FWHMs ? */
   int		recenter_flag;			/* Recenter PSF-candidates? */
 /* Check-images */
   checkenum	check_type[MAXCHECK];		/* check-image types */
   int		ncheck_type;			/* nb of params */
-  char		*(check_name[MAXCHECK]);	/* check-image names */
+  char		*check_name[MAXCHECK];          /* check-image names */
   int		ncheck_name;			/* nb of params */
   int		check_cubeflag;			/* check-images as datacubes?*/
 /* PSF variability */
   enum {VAR_NONE, VAR_SEEING}	var_type;	/* PSF variability type */
-  char		*(context_name[MAXCONTEXT]);	/* Names of context-keys */
+  char		*context_name[MAXCONTEXT];	/* Names of context-keys */
   int		ncontext_name;			/* nb of params */
   int		context_group[MAXCONTEXT];	/* Context group */
   int		ncontext_group;			/* nb of params */
@@ -132,7 +132,7 @@ typedef struct
   int		ncplot_device;			/* nb of params */
   cplotenum	cplot_type[MAXCHECK];		/* check-plot types */
   int		ncplot_type;			/* nb of params */
-  char		*(cplot_name[MAXCHECK]);	/* check-plot names */
+  char		*cplot_name[MAXCHECK];          /* check-plot names */
   int		ncplot_name;			/* nb of params */
   int		cplot_flag;			/* = 0 if no check-plot */
   int		cplot_res[2];			/* X,Y check-plot resolution */

@@ -940,6 +940,11 @@ void	malloc_samples(setstruct *set, int nsample)
   }
 
 
+#if !defined(PYTHON_PSFEX) || !PYTHON_PSFEX
+/*
+ * This routine's called from psf.c, but is here in sample.c with I/O code.  So when building
+ * for python, we compile a copy of this routine in utils.c instead
+ */
 /****** realloc_samples ******************************************************
 PROTO   void realloc_samples(setstruct *set, int nsample)
 PURPOSE Re-allocate memory for a set of samples.
@@ -995,7 +1000,6 @@ void	realloc_samples(setstruct *set, int nsample)
   return;
   }
 
-
 /****** free_samples *********************************************************
 PROTO   void free_samples(setstruct *set, int nsample)
 PURPOSE free memory for a set of samples.
@@ -1029,6 +1033,7 @@ void	free_samples(setstruct *set)
 
   return;
   }
+#endif
 
 
 /****** remove_sample ********************************************************
@@ -1041,6 +1046,11 @@ NOTES   -.
 AUTHOR  E. Bertin (IAP, Leiden observatory & ESO)
 VERSION 01/03/99
 */
+#if !defined(PYTHON_PSFEX) || !PYTHON_PSFEX
+/*
+ * This routine's called from psf.c, but is here in sample.c with I/O code.  So when building
+ * for python, we compile a copy of this routine in utils.c instead
+ */
 samplestruct	*remove_sample(setstruct *set, int isample)
 
   {
@@ -1064,8 +1074,13 @@ samplestruct	*remove_sample(setstruct *set, int isample)
 
   return set->sample+isample;
   }
+#endif
 
-
+#if !defined(PYTHON_PSFEX) || !PYTHON_PSFEX
+/*
+ * This routine's called from psf.c, but is here in sample.c with I/O code.  So when building
+ * for python, we compile a copy of this routine in utils.c instead
+ */
 /****** init_set ************************************************************
 PROTO   setstruct *init_set()
 PURPOSE Allocate and initialize a set structure.
@@ -1128,7 +1143,7 @@ void	end_set(setstruct *set)
 
   return;
   }
-
+#endif
 
 /****** make_weights *********************************************************
 PROTO   void make_weights(setstruct *set, samplestruct *sample)

@@ -1,6 +1,9 @@
 *.a
 *.o
 *.os
+*.pyc
+*.so
+*.dylib
 .sconf_temp
 .sconsign.dblite
 ups/*.cfgc
@@ -19,4 +22,6 @@ src/levmar/Makefile
 src/psfex
 src/wcs/Makefile
 stamp-h1
+python/astromatic/psfex/psfexLib_wrap.*
+python/astromatic/psfex/psfexLib.py
 python/astromatic/psfex/version.py
