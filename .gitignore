@@ -1,5 +1,9 @@
 *.a
 *.o
+*.os
+.sconf_temp
+.sconsign.dblite
+ups/*.cfgc
 .deps
 Makefile
 autom4te.cache/
@@ -15,3 +19,4 @@ src/levmar/Makefile
 src/psfex
 src/wcs/Makefile
 stamp-h1
+python/astromatic/psfex/version.py
