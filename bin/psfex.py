@@ -3,8 +3,12 @@ import argparse
 import sys
 from astromatic.psfex.utils import *
 
-def makeit():
-    pass
+def makeit(prefs):
+    # Create an array of PSFs (one PSF for each extension)
+    print "----- %d input catalogues:" % prefs.getNcat()
+    fields = []
+    for cat in prefs.getCatalogs():
+        print cat
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PSFEX")
@@ -34,5 +38,5 @@ if __name__ == "__main__":
 
     prefs.use()
 
-    makeit()
+    makeit(prefs)
     

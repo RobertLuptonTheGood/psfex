@@ -49,14 +49,17 @@ public:
       if (impl.ncat >= MAXFILE) {
 	 throw LSST_EXCEPT(lsst::pex::exceptions::LengthErrorException, "Too many input catalogues");
       }
-      _catalogues.push_back(filename);
-      prefs.incat_name[impl.ncat++] = const_cast<char *>((_catalogues.end() - 1)->c_str());
+      _catalogs.push_back(filename);
+      prefs.incat_name[impl.ncat++] = const_cast<char *>((_catalogs.end() - 1)->c_str());
+   }
+   std::vector<std::string> const& getCatalogs() const {
+      return _catalogs;
    }
 
 private:
    prefstruct& impl;			 // actually it refers to the global "prefs"
    
-   std::vector<std::string> _catalogues; // names of catalogues
+   std::vector<std::string> _catalogs;	// names of catalogs
 };
 
 
