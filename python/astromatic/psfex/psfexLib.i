@@ -12,6 +12,8 @@ Python interface to psfex classes
 %lsst_exceptions()
 
 %{
+#include "lsst/daf/base.h"
+
 #include "prefs.hh"
 #include "psf.hh"
 %}
