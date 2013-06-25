@@ -28,6 +28,7 @@ class Psf;
  * \brief Store all we know about for a visit to a field (maybe including multiple chips)
  */
 class Field {
+   friend void makeit(std::vector<Field *> &fields);
 public:
    Field(std::string const& ident="unknown" ///< Name of Field
       );
@@ -46,6 +47,8 @@ private:
 
    void _finalize(const bool force=false);
 };
+
+void makeit(std::vector<Field *> &fields);
 
 }}
 

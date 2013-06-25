@@ -49,33 +49,19 @@ def makeit(prefs):
     next = fields[0].getNext()          # number of extensions
 
     psfstep = prefs.getPsfStep()
+    psfsteps = None
     if False:
-        psfsteps = None
         nbasis = 0
         psfbasis = None
         psfbasiss = None
 
-    # Initialize context
-    print "Initializing contexts..."
-    context = psfex.Context(prefs.getContextName(), prefs.getContextGroup(), prefs.getGroupDeg(),
-                            prefs.getNgroupDeg(), psfex.Context.REMOVEHIDDEN)
-
-    if not context.getNpc():
-        fullcontext = context
-    else:
-        fullcontext = psfex.Context(prefs.getContextName(), prefs.getContextGroup(), prefs.getGroupDeg(),
-                                    prefs.getNgroupDeg(), psfex.Context.REMOVEHIDDEN)
-        
-        if prefs.len(ncat) < 2:
-            print >> sys.stderr, "Hidden dependencies cannot be derived from a single catalog"
-        elif prefs.getStabilityType() == prefs.STABILITY_EXPOSURE:
-            print >> sys.stderr, "Hidden dependencies have no effect  in STABILITY_TYPE EXPOSURE mode"
-
-"""
-/* Compute PSF steps */
-"""
-
-pass
+    if True:                            # swig should be able to handle [Field], but it can't.
+                                        # this is a problem in my bindings and/or a swig bug
+        _fields = fields
+        fields = psfex.vectorField()
+        for f in _fields:
+            fields.push_back(f)
+    psfex.makeit(fields)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PSFEX")

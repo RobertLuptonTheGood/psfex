@@ -15,9 +15,6 @@ Python interface to psfex classes
 #include "lsst/daf/base.h"
 #include "lsst/afw/image/Wcs.h"
 #include "lsst/afw/image/TanWcs.h"
-namespace lsst { namespace afw { namespace image {
-   class TanWcs;
-}}}
 
 #include "Field.hh"
 #include "prefs.hh"
@@ -34,3 +31,5 @@ namespace lsst { namespace afw { namespace image {
 %include "Field.hh"
 %include "prefs.hh"
 %include "psf.hh"
+
+%template(vectorField) std::vector<astromatic::psfex::Field *>;
