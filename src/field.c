@@ -130,22 +130,7 @@ fieldstruct	*field_init(char *catname)
 
   free_cat(&cat, 1);
 
-  field_locate(field);
-  QCALLOC(field->ccat, catstruct *, MAXCHECK);
-  countsize = prefs.context_nsnap*prefs.context_nsnap;
-  QMALLOC(field->lcount, int *, next0);
-  QMALLOC(field->acount, int *, next0);
-  QMALLOC(field->count, int *, next0);
-  QMALLOC(field->modchi2, double *, next0);
-  QMALLOC(field->modresi, double *, next0);
-  for (e=0; e<next0; e++)
-    {
-    QCALLOC(field->lcount[e], int, countsize);
-    QCALLOC(field->acount[e], int, countsize);
-    QCALLOC(field->count[e], int, countsize);
-    QCALLOC(field->modchi2[e], double, countsize);
-    QCALLOC(field->modresi[e], double, countsize);
-    }
+  field_init_finalize(field);
 
   return field;
   }
@@ -186,96 +171,6 @@ void	field_end(fieldstruct *field)
 
   return;
   }
-
-
-/****** field_locate *********************************************************
-PROTO   void field_locate(fieldstruct *field)
-PURPOSE Compute field position, scale and footprint.
-INPUT   Pointer to field structure.
-OUTPUT  A pointer to the created field structure.
-NOTES   Global preferences are used.
-AUTHOR  E. Bertin (IAP)
-VERSION 05/10/2010
-*/
-void	field_locate(fieldstruct *field)
-  {
-   wcsstruct		*wcs;
-   double		*scale[NAXIS],*scalet[NAXIS],
-			*wcsmean,
-			cosalpha,sinalpha, sindelta, dist, maxradius;
-   int			i, e, lat,lng, naxis;
-
-/* Some initializations */
-  cosalpha = sinalpha = sindelta = 0.0;
-  wcs = field->wcs[0];
-  naxis = wcs->naxis;
-  wcsmean = field->meanwcspos;
-  for (i=0; i<naxis; i++)
-    {
-    QMALLOC(scale[i], double, field->next);
-    scalet[i] = scale[i];
-    wcsmean[i] = 0.0;
-    }
-
-/* Go through each extension */
-  for (e=0; e<field->next; e++)
-    {
-    wcs = field->wcs[e];
-    lng = wcs->lng;
-    lat = wcs->lat;
-/*-- Locate set */
-    if (lat != lng)
-      {
-      cosalpha += cos(wcs->wcsscalepos[lng]*DEG);
-      sinalpha += sin(wcs->wcsscalepos[lng]*DEG);
-      sindelta += sin(wcs->wcsscalepos[lat]*DEG);
-      }
-    for (i=0; i<naxis; i++)
-      {
-      if (lat==lng || (i!=lng && i!=lat))
-        wcsmean[i] += wcs->wcsscalepos[i];
-      *(scalet[i]++) = wcs->wcsscale[i];
-      }
-    }
-
-/* Now make the stats on each axis */
-  lng = field->wcs[0]->lng;
-  lat = field->wcs[0]->lat;
-  for (i=0; i<naxis; i++)
-    {
-    if (lat!=lng && (i==lng))
-      {
-      wcsmean[i] = atan2(sinalpha/field->next,cosalpha/field->next)/DEG;
-      wcsmean[i] = fmod(wcsmean[i]+360.0, 360.0);
-      }
-    else if (lat!=lng && (i==lat))
-      wcsmean[i] = asin(sindelta/field->next)/DEG;
-    else
-      wcsmean[i] /= field->next;
-    field->meanwcsscale[i] = dqmedian(scale[i], field->next);
-    }
-
-/* Compute the radius of the field and mean airmass */
-  maxradius = 0.0;
-  for (e=0; e<field->next; e++)
-    {
-    wcs = field->wcs[e];
-/*-- The distance is the distance to the center + the diagonal of the image */
-    dist = wcs_dist(wcs, wcs->wcsscalepos, field->meanwcspos)
-		+ wcs->wcsmaxradius;
-    if (dist>maxradius)
-      maxradius = dist;
-    }
-
-  field->maxradius = maxradius;
-
-/* Free memory */
-  for (i=0; i<naxis; i++)
-    free(scale[i]);
-
-  return;
-  }
-
 
 /****** field_count ***********************************************************
 PROTO	void field_count(fieldstruct **fields, setstruct *set, int counttype)

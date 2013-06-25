@@ -48,6 +48,7 @@
 #include	"wcs/lin.h"
 #include	"wcs/tnx.h"
 #include	"wcs/poly.h"
+#include	"misc.h"
 
 /******* copy_wcs ************************************************************
 PROTO	wcsstruct *copy_wcs(wcsstruct *wcsin)
@@ -1481,33 +1482,9 @@ AUTHOR	E. Bertin (IAP)
 VERSION	24/07/2002
  ***/
 double	wcs_dist(wcsstruct *wcs, double *wcspos1, double *wcspos2)
-
   {
-  double	d, dp;
-  int		i, lng, lat;
-
-  lng = wcs->lng;
-  lat = wcs->lat;
-  if (lat!=lng)
-    {
-/*-- We are operating in angular coordinates */
-    d = sin(wcspos1[lat]*DEG)*sin(wcspos2[lat]*DEG)
-	+ cos(wcspos1[lat]*DEG)*cos(wcspos2[lat]*DEG)
-		*cos((wcspos1[lng]-wcspos2[lng])*DEG);
-    return d>-1.0? (d<1.0 ? acos(d)/DEG : 0.0) : 180.0;
-    }
-  else
-    {
-    d = 0.0;
-    for (i=0; i<wcs->naxis; i++)
-      {
-      dp = wcspos1[i] - wcspos2[i];
-      d += dp*dp;
-      }
-    return sqrt(d);
-    }
+     return wcs_dist_impl(wcs->naxis, wcs->lat, wcs->lng, wcspos1, wcspos2);
   }
-
 
 /******* wcs_scale ***********************************************************
 PROTO	double wcs_scale(wcsstruct *wcs, double *pixpos)

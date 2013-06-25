@@ -33,3 +33,5 @@ extern double	dqmedian(double *ra, int n);
 extern float	fast_median(float *arr, int n),
 		fqmedian(float *ra, int n);
 
+extern double wcs_dist_impl(int naxis, int lat, int lng, double *wcspos1, double *wcspos2);
+

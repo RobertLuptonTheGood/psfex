@@ -31,12 +31,14 @@
 #endif
 
 #include	<stdlib.h>
+#include	<math.h>
 
 #include	"define.h"
 #include	"types.h"
 #include	"globals.h"
 #include	"misc.h"
 
+#define           DEG     (PI/180.0)      /* 1 deg in radians */
 
 /******* fast_median **********************************************************
 PROTO	float fast_median(float *arr, int n)
@@ -218,3 +220,37 @@ float	fqmedian(float *ra, int n)
   }
 
 
+/******* wcs_dist ***********************************************************
+PURPOSE	Compute the angular distance between 2 points on the sky.
+INPUT	Unpacked WCS structure,
+	Pointer to the first array of world coordinates,
+	Pointer to the second array of world coordinates.
+OUTPUT	Angular distance (in degrees) between points.
+NOTES	-.
+AUTHOR	E. Bertin (IAP)
+VERSION	24/07/2002
+ ***/
+double	wcs_dist_impl(int naxis, int lat, int lng, double *wcspos1, double *wcspos2)
+  {
+  double	d, dp;
+  int		i;
+
+  if (lat!=lng)
+    {
+/*-- We are operating in angular coordinates */
+    d = sin(wcspos1[lat]*DEG)*sin(wcspos2[lat]*DEG)
+	+ cos(wcspos1[lat]*DEG)*cos(wcspos2[lat]*DEG)
+		*cos((wcspos1[lng]-wcspos2[lng])*DEG);
+    return d>-1.0? (d<1.0 ? acos(d)/DEG : 0.0) : 180.0;
+    }
+  else
+    {
+    d = 0.0;
+    for (i=0; i<naxis; i++)
+      {
+      dp = wcspos1[i] - wcspos2[i];
+      d += dp*dp;
+      }
+    return sqrt(d);
+    }
+  }

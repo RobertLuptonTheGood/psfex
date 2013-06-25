@@ -22,6 +22,16 @@ Prefs::Prefs(std::string const& filename, lsst::daf::base::PropertySet const* va
     }
     
     readprefs(cfilename, &argkey[0], &argval[0], narg);
+
+    for (int i = 0; i != impl.ncontext_name; ++i) {
+        _context_names.push_back(impl.context_name[i]);
+    }
+    for (int i = 0; i != impl.ncontext_group; ++i) {
+        _context_groups.push_back(impl.context_group[i]);
+    }
+    for (int i = 0; i != impl.ngroup_deg; ++i) {
+        _group_degs.push_back(impl.group_deg[i]);
+    }
 }
 
 void

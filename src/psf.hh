@@ -10,18 +10,6 @@ extern "C" {
 
 namespace astromatic { namespace psfex {
 
-#if 0
-extern void
-		psf_makebasis(psfstruct *psf, setstruct *set,
-			basistypenum basis_type,  int nvec),
-		psf_makeresi(psfstruct *psf, setstruct *set, int centflag,
-			double prof_accuracy),
-		psf_makemask(psfstruct *psf, setstruct *set, double chithresh),
-		psf_orthopoly(psfstruct *psf, setstruct *set),
-		psf_save(psfstruct *psf,  char *filename, int ext, int next);
-
-#endif
-
 class Set;
 class Psf;
 
@@ -32,6 +20,8 @@ class Context {
     friend class Psf;
     friend class Set;
 public:
+    enum { KEEPHIDDEN=CONTEXT_KEEPHIDDEN, REMOVEHIDDEN=CONTEXT_REMOVEHIDDEN };
+        
     Context(std::vector<std::string> const& names, ///< names of fields to use
             std::vector<int> const& group,         ///< tags for each member of names
             std::vector<int> const& degree,        ///< polynomial degree for each group
@@ -54,6 +44,7 @@ public:
     ~Context() {
         context_end(impl);
     }
+    int getNpc() const { return impl->npc; }
 private:
     contextstruct *impl;
 };

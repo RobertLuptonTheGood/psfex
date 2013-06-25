@@ -76,6 +76,7 @@ typedef struct field
 
 /*---------------------------------- protos --------------------------------*/
 extern fieldstruct	*field_init(char *catname);
+extern void field_init_finalize(fieldstruct *field);
 
 extern void		field_count(fieldstruct **fields, setstruct *set,
 				int counttype),
