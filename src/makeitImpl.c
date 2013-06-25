@@ -55,7 +55,7 @@
 psfstruct	*make_psf(setstruct *set, float psfstep,
 			float *basis, int nbasis, contextstruct *context);
 void		write_error(char *msg1, char *msg2);
-time_t		thetime, thetime2;
+time_t   thetime, thetime2;
 
 /*****************************************************************************/
 
@@ -75,8 +75,7 @@ makeit_body(
    contextstruct	*context, *fullcontext;
    struct tm		*tm;
    char			str[MAXCHAR];
-   char			**incatnames,
-			*pstr;
+   char			**incatnames;
    float		**psfbasiss,
 			*psfsteps, *psfbasis, *basis,
 			psfstep, step;
@@ -417,36 +416,12 @@ makeit_body(
 /*---- Free memory */
       end_set(set2);
       }
-    }
-
-/* Save result */
-  for (c=0; c<ncat; c++)
-    {
-    sprintf(str, "Saving PSF model and metadata for %s...",
-	fields[c]->rtcatname);
-    NFPRINTF(OUTPUT, str);
-/*-- Create a file name with a "PSF" extension */
-    if (*prefs.psf_dir)
-      {
-      if ((pstr = strrchr(incatnames[c], '/')))
-        pstr++;
-      else
-        pstr = incatnames[c];
-      sprintf(str, "%s/%s", prefs.psf_dir, pstr);
-      }
-    else
-      strcpy(str, incatnames[c]);
-    if (!(pstr = strrchr(str, '.')))
-      pstr = str+strlen(str);
-    sprintf(pstr, "%s", prefs.psf_suffix);
-#if 0
-    field_psfsave(fields[c], str);
-#endif
+ 
 /* Create homogenisation kernels */
     if (prefs.homobasis_type != HOMOBASIS_NONE)
-      {
-      for (ext=0; ext<next; ext++)
-        {
+    {
+       for (ext=0; ext<next; ext++)
+       {
         if (next>1)
           sprintf(str, "Computing homogenisation kernel for %s[%d/%d]...",
 		fields[c]->rtcatname, ext+1, next);
@@ -454,21 +429,9 @@ makeit_body(
           sprintf(str, "Computing homogenisation kernel for %s...",
 		fields[c]->rtcatname);
         NFPRINTF(OUTPUT, str);
-        if (*prefs.homokernel_dir)
-          {
-          if ((pstr = strrchr(incatnames[c], '/')))
-            pstr++;
-          else
-            pstr = incatnames[c];
-          sprintf(str, "%s/%s", prefs.homokernel_dir, pstr);
-          }
-        else
-          strcpy(str, incatnames[c]);
-        if (!(pstr = strrchr(str, '.')))
-          pstr = str+strlen(str);
-        sprintf(pstr, "%s", prefs.homokernel_suffix);
-        psf_homo(fields[c]->psf[ext], str, prefs.homopsf_params,
-		prefs.homobasis_number, prefs.homobasis_scale, ext, next);
+
+        psf_homo(fields[c]->psf[ext], NULL, prefs.homopsf_params,
+		 prefs.homobasis_number, prefs.homobasis_scale, ext, next);
         }
       }
 #ifdef HAVE_PLPLOT
@@ -485,7 +448,7 @@ makeit_body(
 /*-- Update XML */
     if (prefs.xml_flag)
       update_xml(fields[c]);
-    }
+  }
 
 /* Processing end date and time */
   thetime2 = time(NULL);

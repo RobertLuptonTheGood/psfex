@@ -55,7 +55,7 @@
 psfstruct	*make_psf(setstruct *set, float psfstep,
 			float *basis, int nbasis, contextstruct *context);
 void		write_error(char *msg1, char *msg2);
-time_t		thetime, thetime2;
+extern time_t		thetime, thetime2;
 
 /********************************** makeit ***********************************/
 /*
@@ -132,7 +132,55 @@ void	makeit(void)
   QPRINTF(OUTPUT, "\n");
 
   makeit_body(fields, &context, &fullcontext);
-  
+
+/* Save result */
+  for (c=0; c<ncat; c++)
+    {
+       sprintf(str, "Saving PSF model and metadata for %s...",
+	       fields[c]->rtcatname);
+       NFPRINTF(OUTPUT, str);
+/*-- Create a file name with a "PSF" extension */
+       if (*prefs.psf_dir)
+       {
+	  if ((pstr = strrchr(incatnames[c], '/')))
+	     pstr++;
+	  else
+	     pstr = incatnames[c];
+	  sprintf(str, "%s/%s", prefs.psf_dir, pstr);
+       }
+       else
+	  strcpy(str, incatnames[c]);
+       if (!(pstr = strrchr(str, '.')))
+	  pstr = str+strlen(str);
+       sprintf(pstr, "%s", prefs.psf_suffix);
+       field_psfsave(fields[c], str);
+/*-- maybe save homogenised kernel */
+       if (prefs.homobasis_type != HOMOBASIS_NONE)
+       {
+	  if (c == 0)
+	     fprintf(stderr,
+		     "RHL has not checked that the psf_homo code leaves the psf unchanged.\n"
+		     "He is writing the PSFs out *after* the homo code has run\n");
+
+	  for (ext=0; ext<next; ext++)
+	  {
+	     if (*prefs.homokernel_dir)
+	     {
+		if ((pstr = strrchr(incatnames[c], '/')))
+		   pstr++;
+		else
+		   pstr = incatnames[c];
+		sprintf(str, "%s/%s", prefs.homokernel_dir, pstr);
+	     }
+	     else
+		strcpy(str, incatnames[c]);
+	     if (!(pstr = strrchr(str, '.')))
+		pstr = str+strlen(str);
+	     sprintf(pstr, "%s", prefs.homokernel_suffix);
+	     psf_savehomo(fields[c]->psf[ext], str, ext, next);
+	  }
+       }
+    }
 /* Free memory */
   for (c=0; c<ncat; c++)
     field_end(fields[c]);

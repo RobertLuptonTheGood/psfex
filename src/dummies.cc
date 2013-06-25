@@ -5,6 +5,7 @@
 
 extern "C" {
 #include "context.h"
+#include "prefs.h"
 #include "psf.h"
 #include "sample.h"
 
@@ -132,10 +133,35 @@ makeit(std::vector<Field *> &fields_
     for (int i = 0; i != fields.size(); ++i) {
         fields[i] = &fields_[i]->impl;
     }
+    /*
+     * We are going to scribble on prefs.incat_name to replace the array of (char*) with
+     * an array of data
+     */
+    std::vector<char *> incat_name(prefs.ncat);
+    for (int i = 0; i != prefs.ncat; ++i) {
+        incat_name[i] = prefs.incat_name[i];
+    }
 
     contextstruct *context = NULL, *fullcontext = NULL;
-    makeit_body(&fields[0], &context, &fullcontext);
+    try {
+        for (int i = 0; i != prefs.ncat; ++i) {
+            prefs.incat_name[i] = reinterpret_cast<char *>(666);
+        }
 
+        makeit_body(&fields[0], &context, &fullcontext);
+    } catch(...) {
+        // Restore prefs.incat_name
+        for (int i = 0; i != prefs.ncat; ++i) {
+            prefs.incat_name[i] = incat_name[i];
+        }
+        throw;
+    }
+    
+    // Restore prefs.incat_name
+    for (int i = 0; i != prefs.ncat; ++i) {
+        prefs.incat_name[i] = incat_name[i];
+    }
+    
     if (context->npc) {
         context_end(fullcontext);
     }

@@ -259,7 +259,6 @@ void	psf_homo(psfstruct *psf, char *filename, double *homopsf_params,
   psf->homopsf_params[0] = homopsf_params[0];
   psf->homopsf_params[1] = homopsf_params[1];
   psf->homobasis_number = homobasis_number;
-  psf_savehomo(psf, filename, ext, next);
 
   return;
   }
