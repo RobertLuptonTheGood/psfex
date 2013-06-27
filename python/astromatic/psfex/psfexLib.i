@@ -19,6 +19,9 @@ Python interface to psfex classes
 #include "Field.hh"
 #include "prefs.hh"
 #include "psf.hh"
+#include "vignet.h"
+static double PSFEX_SAVE_BIG = BIG;
+static double PSFEX_SAVE_INTERPFAC = INTERPFAC;
 %}
 
 %import "lsst/daf/base/baseLib.i"
@@ -33,3 +36,12 @@ Python interface to psfex classes
 %include "psf.hh"
 
 %template(vectorField) std::vector<astromatic::psfex::Field *>;
+//%template(vectorSample) std::vector<astromatic::psfex::Sample *>;
+%template(vectorSet) std::vector<astromatic::psfex::Set *>;
+
+%inline %{
+   #undef BIG
+   #undef INTERPFAC
+   double BIG = PSFEX_SAVE_BIG;
+   double INTERPFAC = PSFEX_SAVE_INTERPFAC;
+%}

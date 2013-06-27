@@ -19,10 +19,13 @@ setstruct *
 load_samples(char **filenames, int catindex, int ncat, int ext,
              int next, contextstruct *context)
 {
+#if 0
     for (int i = 0; i != ncat; ++i) {
-        printf("loading %s\n", filenames[catindex + i]);
+        printf("loading 0x%x\n", filenames[catindex + i]);
     }
-    return 0;
+#endif
+
+    return reinterpret_cast<setstruct *>(filenames[catindex + 0]);
 }
 
 }
@@ -48,7 +51,9 @@ struct PsfUnpack : private lsst::afw::image::Wcs {
 namespace astromatic { namespace psfex {
 
 void
-Field::addExt(lsst::afw::image::Wcs const& wcs_, int const nobj)
+Field::addExt(lsst::afw::image::Wcs const& wcs_,
+              int const naxis1, int const naxis2,
+              int const nobj)
 {
   QREALLOC(impl.psf, psfstruct *, impl.next);
   QREALLOC(impl.wcs, wcsstruct *, impl.next);
@@ -62,7 +67,9 @@ Field::addExt(lsst::afw::image::Wcs const& wcs_, int const nobj)
 
 /************************************************************************************************************/
   wcs->naxis = wcsPrm->naxis;
-  //int		naxisn[NAXIS];		/* FITS NAXISx parameters */
+  wcs->naxisn[0] = naxis1;
+  wcs->naxisn[1] = naxis2;
+  
   for (int i = 0; i != wcs->naxis; ++i) {
       strncpy(wcs->ctype[i], wcsPrm->ctype[i], sizeof(wcs->ctype[i]) - 1);
       strncpy(wcs->cunit[i], wcsPrm->cunit[i], sizeof(wcs->cunit[i]) - 1);
@@ -122,11 +129,12 @@ Field::addExt(lsst::afw::image::Wcs const& wcs_, int const nobj)
 }
 
 extern "C" {
-    void makeit_body(fieldstruct **fields, contextstruct	**context, contextstruct **fullcontext);
+    void makeit_body(fieldstruct **fields, contextstruct **context, contextstruct **fullcontext);
 }
         
 void
-makeit(std::vector<Field *> &fields_
+makeit(std::vector<Field *> &fields_,
+       std::vector<Set *> const& sets
       )
 {
     std::vector<fieldstruct *> fields(fields_.size());
@@ -145,7 +153,7 @@ makeit(std::vector<Field *> &fields_
     contextstruct *context = NULL, *fullcontext = NULL;
     try {
         for (int i = 0; i != prefs.ncat; ++i) {
-            prefs.incat_name[i] = reinterpret_cast<char *>(666);
+            prefs.incat_name[i] = reinterpret_cast<char *>(sets[i]->impl);
         }
 
         makeit_body(&fields[0], &context, &fullcontext);

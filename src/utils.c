@@ -270,9 +270,42 @@ int	findnkey(char *str, char *key, int size, int nkey)
 #include "sample.h"
 
 /*
- * This routine's called from psf.c, but is here in sample.c with I/O code.  So when building
+ * These routines are called from psf.c, but is here in sample.c with I/O code.  So when building
  * for python, we compile a copy of this routine in utils.c instead
  */
+/****** malloc_samples *******************************************************
+PROTO   void malloc_samples(setstruct *set, int nsample)
+PURPOSE Allocate memory for a set of samples.
+INPUT   set structure pointer,
+        desired number of samples.
+OUTPUT  -.
+NOTES   -.
+AUTHOR  E. Bertin (IAP, Leiden observatory & ESO)
+VERSION 26/03/2008
+*/
+void	malloc_samples(setstruct *set, int nsample)
+
+  {
+   samplestruct	*sample;
+   int		n;
+
+  QMALLOC(set->sample, samplestruct, nsample);
+  sample = set->sample;
+  for (n=nsample; n--; sample++)
+    {
+    QMALLOC(sample->vig, float, set->nvig);
+    QMALLOC(sample->vigresi, float, set->nvig);
+    QMALLOC(sample->vigweight, float, set->nvig);
+    QMALLOC(sample->vigchi, float, set->nvig);
+    if (set->ncontext)
+      QMALLOC(sample->context, double, set->ncontext);
+    }
+
+  set->nsamplemax = nsample;
+
+  return;
+  }
+
 /****** realloc_samples ******************************************************
 PROTO   void realloc_samples(setstruct *set, int nsample)
 PURPOSE Re-allocate memory for a set of samples.

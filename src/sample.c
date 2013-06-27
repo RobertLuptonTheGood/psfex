@@ -905,7 +905,11 @@ void	recenter_sample(samplestruct *sample, setstruct *set, float fluxrad)
   return;
   }
 
-
+#if !defined(PYTHON_PSFEX) || !PYTHON_PSFEX
+/*
+ * These routines are called from psf.c, but is here in sample.c with I/O code.  So when building
+ * for python, we compile a copy of this routine in utils.c instead
+ */
 /****** malloc_samples *******************************************************
 PROTO   void malloc_samples(setstruct *set, int nsample)
 PURPOSE Allocate memory for a set of samples.
@@ -939,12 +943,6 @@ void	malloc_samples(setstruct *set, int nsample)
   return;
   }
 
-
-#if !defined(PYTHON_PSFEX) || !PYTHON_PSFEX
-/*
- * This routine's called from psf.c, but is here in sample.c with I/O code.  So when building
- * for python, we compile a copy of this routine in utils.c instead
- */
 /****** realloc_samples ******************************************************
 PROTO   void realloc_samples(setstruct *set, int nsample)
 PURPOSE Re-allocate memory for a set of samples.
