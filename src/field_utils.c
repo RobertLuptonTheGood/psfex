@@ -135,42 +135,6 @@ fieldstruct	*field_init(char *catname)
   return field;
   }
 
-/****** field_end *************************************************************
-PROTO	void field_end(fieldstruct *field)
-PURPOSE	Free a PSF MEF structure (groups of PSFs).
-INPUT	Pointer to the fieldstruct.
-OUTPUT  -.
-NOTES   .
-AUTHOR  E. Bertin (IAP)
-VERSION 08/04/2010
- ***/
-void	field_end(fieldstruct *field)
-  {
-   int	ext;
-
-  for (ext=0; ext<field->next; ext++)
-    {
-    psf_end(field->psf[ext]);
-    end_wcs(field->wcs[ext]);
-    free(field->lcount[ext]);
-    free(field->acount[ext]);
-    free(field->count[ext]);
-    free(field->modresi[ext]);
-    free(field->modchi2[ext]);
-    }
-  free(field->psf);
-  free(field->wcs);
-  free(field->ccat);
-  free(field->lcount);
-  free(field->acount);
-  free(field->count);
-  free(field->modchi2);
-  free(field->modresi);
-  free(field);
-
-  return;
-  }
-
 /****** field_psfsave *********************************************************
 PROTO   void	field_psfsave(fieldstruct *field, char *filename)
 PURPOSE Save PSF data as a Multi-extension FITS file.

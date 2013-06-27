@@ -100,7 +100,7 @@ setstruct	*init_set(contextstruct *context),
 void		end_set(setstruct *set),
 		free_samples(setstruct *set),
  		malloc_samples(setstruct *set, int nsample),
-		make_weights(setstruct *set, samplestruct *sample),
+                make_weights(setstruct *set, float prof_accuracy, samplestruct *sample),
 		realloc_samples(setstruct *set, int nsample),
 		recenter_sample(samplestruct *sample, setstruct *set,
 			float fluxrad);

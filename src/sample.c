@@ -735,7 +735,7 @@ setstruct *read_samples(setstruct *set, char *filename,
       if (dval>cmax[i])
         cmax[i] = dval;
       }
-    make_weights(set, sample);
+    make_weights(set, prefs.prof_accuracy, sample);
     recenter_sample(sample, set, *fluxrad);
     nsample++;
     }
@@ -767,7 +767,11 @@ setstruct *read_samples(setstruct *set, char *filename,
   return set;
   }
 
-
+#if !defined(PYTHON_PSFEX) || !PYTHON_PSFEX
+/*
+ * These routines are called from psf.c, but is here in sample.c with I/O code.  So when building
+ * for python, we compile a copy of this routine in utils.c instead
+ */
 /****** recenter_sample ******************************************************
 PROTO   void recenter_samples(samplestruct sample,
 		setstruct *set, float fluxrad)
@@ -905,11 +909,6 @@ void	recenter_sample(samplestruct *sample, setstruct *set, float fluxrad)
   return;
   }
 
-#if !defined(PYTHON_PSFEX) || !PYTHON_PSFEX
-/*
- * These routines are called from psf.c, but is here in sample.c with I/O code.  So when building
- * for python, we compile a copy of this routine in utils.c instead
- */
 /****** malloc_samples *******************************************************
 PROTO   void malloc_samples(setstruct *set, int nsample)
 PURPOSE Allocate memory for a set of samples.
@@ -1141,10 +1140,9 @@ void	end_set(setstruct *set)
 
   return;
   }
-#endif
 
 /****** make_weights *********************************************************
-PROTO   void make_weights(setstruct *set, samplestruct *sample)
+PROTO   void make_weights(setstruct *set, float prof_accuracy, samplestruct *sample)
 PURPOSE Produce a weight-map for each sample vignet.
 INPUT   set structure pointer,
         sample structure pointer.
@@ -1153,7 +1151,7 @@ NOTES   -.
 AUTHOR  E. Bertin (IAP,Leiden observatory & ESO)
 VERSION 13/08/2007
 */
-void make_weights(setstruct *set, samplestruct *sample)
+void make_weights(setstruct *set, float prof_accuracy, samplestruct *sample)
 
   {
    float	*vig, *vigweight,
@@ -1161,7 +1159,7 @@ void make_weights(setstruct *set, samplestruct *sample)
    int		i;
 
 /* Produce a weight-map */
-  profaccu2 = prefs.prof_accuracy*prefs.prof_accuracy;
+  profaccu2 = prof_accuracy;
   gain = sample->gain;
   backnoise2 = sample->backnoise2;
   for (vig=sample->vig, vigweight=sample->vigweight, i=set->nvig; i--;)
@@ -1181,3 +1179,4 @@ void make_weights(setstruct *set, samplestruct *sample)
   return;
   }
 
+#endif

@@ -30,21 +30,24 @@ class Set;
  * \brief Store all we know about for a visit to a field (maybe including multiple chips)
  */
 class Field {
-   friend void makeit(std::vector<Field *> &fields, std::vector<Set *> const& sets);
+    friend void makeit(std::vector<Field *> &fields, std::vector<Set *> const& sets);
 public:
-   Field(std::string const& ident="unknown" ///< Name of Field
-      );
-   //
-   void finalize() { _finalize(true); }        
-
-   void addExt(lsst::afw::image::Wcs const& wcs, int const naxis1, int const naxis2, int const nobj=0);
-
-   /// Return the number of extensions
-   int getNext() const { return impl.next; }
+    Field(std::string const& ident="unknown" ///< Name of Field
+         );
+    ~Field();
+    //
+    void finalize() { _finalize(true); }        
+    
+    void addExt(lsst::afw::image::Wcs const& wcs, int const naxis1, int const naxis2, int const nobj=0);
+    
+    /// Return the number of extensions
+    int getNext() const { return impl.next; }
+    /// Return the Psfs
+    std::vector<Psf> const& getPsfs() const;
+    
 private:
-   fieldstruct impl;
-   std::vector<Psf *> _psfs;
-   std::vector<lsst::afw::image::Wcs *> _wcss;
+   fieldstruct &impl;
+   mutable std::vector<Psf> _psfs;
    mutable bool _isInitialized;
 
    void _finalize(const bool force=false);

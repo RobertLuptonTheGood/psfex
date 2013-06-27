@@ -5,7 +5,7 @@
 namespace astromatic { namespace psfex {
 
 Field::Field(std::string const& ident) :
-    _isInitialized(false)
+    impl(*new fieldstruct), _isInitialized(false)
 {
     impl.next = 0;
     
@@ -39,6 +39,11 @@ Field::Field(std::string const& ident) :
     _finalize();
 }
 
+Field::~Field()
+{
+    field_end(&impl);
+}
+        
 /************************************************************************************************************/
 
 void
@@ -48,6 +53,22 @@ Field::_finalize(bool force)
         field_init_finalize(&impl);
         _isInitialized = true;
     }
+}
+
+/************************************************************************************************************/
+
+        
+std::vector<Psf> const&
+Field::getPsfs() const
+{
+    if (_psfs.empty()) {
+        _psfs.reserve(impl.next);
+        for (int i = 0; i != impl.next; ++i) {
+            _psfs.push_back(Psf(impl.psf[i]));
+        }
+    }
+
+    return _psfs;
 }
         
 }}

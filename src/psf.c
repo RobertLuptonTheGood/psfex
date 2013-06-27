@@ -402,6 +402,8 @@ void	psf_end(psfstruct *psf)
   {
    int	d, ndim;
 
+   if (!psf) return;
+
   ndim = psf->poly->ndim;
   for (d=0; d<ndim; d++)
     free(psf->contextname[d]);

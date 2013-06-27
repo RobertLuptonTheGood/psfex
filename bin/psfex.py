@@ -87,13 +87,10 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
     maxelong = (prefs.getMaxellip() + 1.0)/(1.0 - prefs.getMaxellip()) if prefs.getMaxellip() < 1.0 else 100.0
     minsn = prefs.getMinsn()
 
-    # If a NULL pointer is provided, we allocate a new set
+    # allocate a new set iff set is None
     if not set:
 	set = psfex.Set(context)
-	nsample = nsamplemax = 0
 	ncat = 1
-    else:
-	nsample = nsamplemax = set.getNsample()
 
     cmin, cmax = None, None
     if set.getNcontext():
@@ -101,8 +98,8 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
         cmax = np.empty(set.getNcontext())
         for i in range(set.getNcontext()):
 	    if ncat > 1 and set.getNsample():
-		cmin[i] = set.getOffset(i) - set.getScale(i)/2.0;
-		cmax[i] = cmin[i] + set.getScale(i);
+		cmin[i] = set.getContextOffset(i) - set.getContextScale(i)/2.0;
+		cmax[i] = cmin[i] + set.getContextScale(i);
 	    else:
 		cmin[i] =  psfex.cvar.BIG;
 		cmax[i] = -psfex.cvar.BIG;
@@ -248,6 +245,7 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
         if plot and plt:
             plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=0.2, color='blue', label="badpix %d" % sum(dbad))
 
+
     good = np.logical_not(bad)
     if plot and plt:
         plt.plot(imag[good], fluxrad[good], 'o', color="black")
@@ -260,13 +258,16 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
     #
     # Create our sample of stars
     #
+    if not vignet.dtype.isnative:
+        # without the swap setVig fails with "ValueError: 'unaligned arrays cannot be converted to C++'"
+        vignet = vignet.byteswap() 
+
     for i in np.where(good)[0]:
         sample = set.newSample()
         sample.setCatindex(catindex)
         sample.setExtindex(ext)
 
-        #-- Copy the vignet to the training set
-        #memcpy(sample.vig, vignet, vigsize*sizeof(float));
+        sample.setVig(vignet[i])
 
         sample.setNorm(float(flux[i]))
         sample.setBacknoise2(backnoise2)
@@ -274,21 +275,21 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
         sample.setX(float(xm[i]))
         sample.setY(float(ym[i]))
         sample.setFluxrad(float(fluxrad[i]))
-        
+
         for j in range(set.getNcontext()):
             sample.setContext(j, float(contextvalp[j][i]))
 
-        set.addSample(sample)
+        set.finiSample(sample, prefs.getProfAccuracy())
 
     #---- Update min and max
     for j in range(set.getNcontext()):
         cmin[j] = contextvalp[j].min()
 
     # Update the scaling
-    if nsample:
+    if set.getNsample():
         for i in range(set.getNcontext()):
-            set.setContextscale(i, cmax[i] - cmin[i])
-            set.setContextoffset(i, (cmin[i] + cmax[i])/2.0)
+            set.setContextScale(i, cmax[i] - cmin[i])
+            set.setContextOffset(i, (cmin[i] + cmax[i])/2.0)
 
     # Don't waste memory!
     set.trimMemory()
@@ -502,6 +503,9 @@ def makeit(prefs, set):
 
     psfex.makeit(fields, sets)
 
+    psfs = fields[0].getPsfs()
+    print psfs[0]
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PSFEX")
 
@@ -535,4 +539,3 @@ if __name__ == "__main__":
     set = load_samples(prefs, psfex.Context(prefs.getContextName(), [1, 1], [2], 1, True))
 
     makeit(prefs, set)
-    

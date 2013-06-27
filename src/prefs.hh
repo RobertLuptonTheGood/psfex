@@ -78,6 +78,8 @@ public:
    int   getPhotfluxNum() const { return impl.photflux_num; }
    char *getPhotfluxerrRkey() const { return impl.photfluxerr_rkey; }
    int   getPhotfluxerrNum() const { return impl.photfluxerr_num; }
+   int   getProfAccuracy() const { return impl.prof_accuracy; }
+   
    
    std::vector<std::string> const& getContextName() const { return _context_names; }
    std::vector<int> const& getContextGroup() const { return _context_groups; }

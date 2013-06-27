@@ -12,6 +12,10 @@ Python interface to psfex classes
 %lsst_exceptions()
 
 %{
+#define PY_ARRAY_UNIQUE_SYMBOL ASTROMATIC_SEXPY_NUMPY_ARRAY_API
+#include "numpy/arrayobject.h"
+#include "ndarray/swig.h"
+
 #include "lsst/daf/base.h"
 #include "lsst/afw/image/Wcs.h"
 #include "lsst/afw/image/TanWcs.h"
@@ -20,9 +24,15 @@ Python interface to psfex classes
 #include "prefs.hh"
 #include "psf.hh"
 #include "vignet.h"
-static double PSFEX_SAVE_BIG = BIG;
+static double PSFEX_SAVE_BIG = BIG;	// we'll #undef BIG and define a variable called BIG
 static double PSFEX_SAVE_INTERPFAC = INTERPFAC;
 %}
+
+%init %{
+    import_array();
+%}
+
+%include "ndarray.i"
 
 %import "lsst/daf/base/baseLib.i"
 %import "lsst/afw/image/Wcs.i"
@@ -31,12 +41,15 @@ static double PSFEX_SAVE_INTERPFAC = INTERPFAC;
 %template(vectorI) std::vector<int>;
 %template(vectorStr) std::vector<std::string>;
 
+%declareNumPyConverters(ndarray::Array<float,2,2>);
+%declareNumPyConverters(ndarray::Array<const float,2,2>);
+
 %include "Field.hh"
 %include "prefs.hh"
 %include "psf.hh"
 
 %template(vectorField) std::vector<astromatic::psfex::Field *>;
-//%template(vectorSample) std::vector<astromatic::psfex::Sample *>;
+%template(vectorPsf) std::vector<astromatic::psfex::Psf>;
 %template(vectorSet) std::vector<astromatic::psfex::Set *>;
 
 %inline %{
