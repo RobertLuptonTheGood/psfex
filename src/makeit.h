@@ -19,5 +19,5 @@
 #endif
 
 extern
-void makeit_body(fieldstruct **fields, contextstruct	**context, contextstruct **fullcontext);
+void makeit_body(fieldstruct **fields, contextstruct	**context, contextstruct **fullcontext, int);
 #endif

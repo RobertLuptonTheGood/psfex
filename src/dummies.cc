@@ -129,7 +129,7 @@ Field::addExt(lsst::afw::image::Wcs const& wcs_,
 }
 
 extern "C" {
-    void makeit_body(fieldstruct **fields, contextstruct **context, contextstruct **fullcontext);
+    void makeit_body(fieldstruct **fields, contextstruct **context, contextstruct **fullcontext, int);
 }
         
 void
@@ -156,7 +156,7 @@ makeit(std::vector<Field *> &fields_,
             prefs.incat_name[i] = reinterpret_cast<char *>(sets[i]->impl);
         }
 
-        makeit_body(&fields[0], &context, &fullcontext);
+        makeit_body(&fields[0], &context, &fullcontext, false);
     } catch(...) {
         // Restore prefs.incat_name
         for (int i = 0; i != prefs.ncat; ++i) {

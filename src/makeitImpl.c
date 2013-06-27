@@ -66,7 +66,8 @@ void
 makeit_body(
    fieldstruct		**fields,
    contextstruct	**context_,
-   contextstruct	**fullcontext_
+   contextstruct	**fullcontext_,
+   int                  free_sets	/* if false, don't free any sets as we don't own them */
    )
   {
    psfstruct		**cpsf,
@@ -124,7 +125,7 @@ makeit_body(
       {
       set = load_samples(incatnames, 0, ncat, ALL_EXTENSIONS, next, context);
       psfstep = (float)((set->fwhm/2.35)*0.5);
-      end_set(set);
+      if (free_sets) end_set(set);
       }
 /*-- Need to derive a common pixel step for each ext */
     else if (prefs.newbasis_type == NEWBASIS_PCAINDEPENDENT
@@ -138,7 +139,7 @@ makeit_body(
         {
         set = load_samples(incatnames, 0, ncat, ext, next, context);
         psfsteps[ext] = (float)(psfstep? psfstep : (set->fwhm/2.35)*0.5);
-        end_set(set);
+        if (free_sets) end_set(set);
         }
       }
     }
@@ -156,7 +157,7 @@ makeit_body(
         set = load_samples(incatnames, c, 1, ext, next, context);
         step = psfstep;
         cpsf[c+ext*ncat] = make_psf(set, psfstep, NULL, 0, context);
-        end_set(set);
+        if (free_sets) end_set(set);
         }
     nbasis = prefs.newbasis_number;
     psfbasis = pca_onsnaps(cpsf, ncat*next, nbasis);
@@ -183,7 +184,7 @@ makeit_body(
         NFPRINTF(OUTPUT, str);
         set = load_samples(incatnames, c, 1, ext, next, context);
         cpsf[c] = make_psf(set, step, NULL, 0, context);
-        end_set(set);
+        if (free_sets) end_set(set);
         }
       psfbasiss[ext] = pca_onsnaps(cpsf, ncat, nbasis);
       for (c=0 ; c<ncat; c++)
@@ -211,7 +212,7 @@ makeit_body(
           step = psfstep;
         basis = psfbasiss? psfbasiss[ext] : psfbasis;
         cpsf[p++] = make_psf(set, step, basis, nbasis, context);
-        end_set(set);
+        if (free_sets) end_set(set);
         }
       }
     free(fullcontext->pc);
@@ -233,7 +234,7 @@ makeit_body(
       field_count(fields, set, COUNT_LOADED);
       psf = make_psf(set, step, basis, nbasis, context);
       field_count(fields, set, COUNT_ACCEPTED);
-      end_set(set);
+      if (free_sets) end_set(set);
       NFPRINTF(OUTPUT, "Computing final PSF model...");
       context_apply(context, psf, fields, ALL_EXTENSIONS, 0, ncat);
       psf_end(psf);
@@ -254,7 +255,7 @@ makeit_body(
         field_count(fields, set, COUNT_LOADED);
         psf = make_psf(set, step, basis, nbasis, fullcontext);
         field_count(fields, set, COUNT_ACCEPTED);
-        end_set(set);
+        if (free_sets) end_set(set);
         context_apply(fullcontext, psf, fields, ALL_EXTENSIONS, c, 1);
         psf_end(psf);
         }
@@ -285,7 +286,7 @@ makeit_body(
           field_count(fields, set, COUNT_LOADED);
           cpsf[c] = make_psf(set, step, basis, nbasis, context);
           field_count(fields, set, COUNT_ACCEPTED);
-          end_set(set);
+          if (free_sets) end_set(set);
           }
         free(fullcontext->pc);
         fullcontext->pc = pca_oncomps(cpsf, 1, ncat, context->npc);
@@ -315,7 +316,7 @@ makeit_body(
         field_count(fields, set, COUNT_LOADED);
         psf = make_psf(set, step, basis, nbasis, fullcontext);
         field_count(fields, set, COUNT_ACCEPTED);
-        end_set(set);
+        if (free_sets) end_set(set);
         context_apply(fullcontext, psf, fields, ext, 0, ncat);
         psf_end(psf);
         }
@@ -340,7 +341,7 @@ makeit_body(
           field_count(fields, set, COUNT_LOADED);
           psf = make_psf(set, step, basis, nbasis, context);
           field_count(fields, set, COUNT_ACCEPTED);
-          end_set(set);
+          if (free_sets) end_set(set);
           context_apply(context, psf, fields, ext, c, 1);
           psf_end(psf);
           }
@@ -414,7 +415,7 @@ makeit_body(
           }
 #endif
 /*---- Free memory */
-      end_set(set2);
+      if (free_sets) end_set(set2);
       }
  
 /* Create homogenisation kernels */

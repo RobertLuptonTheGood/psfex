@@ -131,7 +131,7 @@ void	makeit(void)
     }
   QPRINTF(OUTPUT, "\n");
 
-  makeit_body(fields, &context, &fullcontext);
+  makeit_body(fields, &context, &fullcontext, 1);
 
 /* Save result */
   for (c=0; c<ncat; c++)
