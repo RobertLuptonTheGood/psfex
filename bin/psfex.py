@@ -201,7 +201,7 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
                 str2 = "[%d/%d]" %(ext+1, next) if next > 1 else ""
 
     # Now examine each vector of the shipment
-    sn = flux/fluxerr
+    sn = flux/np.where(fluxerr > 0, fluxerr, 1)
     sn[fluxerr < 0] = psfex.cvar.BIG
     #---- Apply some selection over flags, fluxes...
     if plot and plt:
@@ -284,6 +284,7 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
     #---- Update min and max
     for j in range(set.getNcontext()):
         cmin[j] = contextvalp[j].min()
+        cmax[j] = contextvalp[j].max()
 
     # Update the scaling
     if set.getNsample():
@@ -322,7 +323,8 @@ def load_samples(prefs, context, catindex=0, ext=psfex.Prefs.ALL_EXTENSIONS, nex
         for i in range(ncat):
             fwhms[i] = []
                 
-	    print "Examining Catalog #%d" % (i+1)
+            if prefs.getVerboseType() != prefs.QUIET:
+                print "Examining Catalog #%d" % (i+1)
             #---- Read input catalog
 	    icat = catindex + i
 
@@ -423,7 +425,8 @@ def load_samples(prefs, context, catindex=0, ext=psfex.Prefs.ALL_EXTENSIONS, nex
 
     set.setFwhm(mode)
 
-    print "%d samples loaded." % set.getNsample()
+    if prefs.getVerboseType() != prefs.QUIET:
+        print "%d samples loaded." % set.getNsample()
 
     if not set.getNsample():
 	print >> sys.stderr, "No appropriate source found!!"
@@ -448,7 +451,9 @@ def load_samples(prefs, context, catindex=0, ext=psfex.Prefs.ALL_EXTENSIONS, nex
 
 def makeit(prefs, set):
     # Create an array of PSFs (one PSF for each extension)
-    print "----- %d input catalogues:" % prefs.getNcat()
+    if prefs.getVerboseType() != prefs.QUIET:
+        print "----- %d input catalogues:" % prefs.getNcat()
+
     fields = []
     for cat in prefs.getCatalogs():
         field = psfex.Field(cat)
@@ -503,8 +508,7 @@ def makeit(prefs, set):
 
     psfex.makeit(fields, sets)
 
-    psfs = fields[0].getPsfs()
-    print psfs[0]
+    return [f.getPsfs() for f in fields]
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PSFEX")
@@ -538,4 +542,51 @@ if __name__ == "__main__":
 
     set = load_samples(prefs, psfex.Context(prefs.getContextName(), [1, 1], [2], 1, True))
 
-    makeit(prefs, set)
+    psfs = makeit(prefs, set)
+    psf = psfs[0][0]
+
+    #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    naxis1 = None
+    for cat in prefs.getCatalogs():
+        if naxis1 is not None:
+            break
+        with pyfits.open(cat) as pf:
+            for hdu in pf:
+                if hdu.name == "LDAC_IMHEAD":
+                    hdr = hdu.data[0][0]    # the fits header from the original fits image
+                    md = dafBase.PropertySet()
+                    for line in hdr:
+                        try:
+                            md.set(*splitFitsCard(line))
+                        except AttributeError:
+                            continue
+                    naxis1, naxis2 = md.get("NAXIS1"), md.get("NAXIS2")
+                    break
+    
+    import lsst.afw.display.utils as ds9Utils
+    nx, ny = 13, 10
+    mos = ds9Utils.Mosaic(gutter=2, background=0.02)
+    for x in np.linspace(0, naxis1, nx):
+        for y in np.linspace(0, naxis2, ny):
+            psf.build(x, y)
+
+            im = afwImage.ImageF(*psf.getLoc().shape)
+            im.getArray()[:] = psf.getLoc()
+            im /= float(im.getArray().max())
+            
+            mos.append(im)
+
+    mosaic = mos.makeMosaic(mode=nx)
+    ds9.mtv(mosaic)
+    
+    if False:
+        while True:
+            im = afwImage.ImageF(*psf.getLoc().shape)
+            im.getArray()[:] = psf.getLoc()
+            im /= float(im.getArray().max())
+            ds9.mtv(im)
+            
+        import pdb; pdb.set_trace()
+    else:
+        import pdb; pdb.set_trace() 

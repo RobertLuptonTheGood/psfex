@@ -130,13 +130,13 @@ public:
     Psf(psfstruct *psf=0) : impl(psf) {}
     ~Psf();
     
+    ndarray::Array<float,2,2> getLoc() const;
+
     void make(Set &s, double prof_accuracy) {
         psf_make(impl, s.impl, prof_accuracy);
     }
 
-    void build(double *pos) {
-        psf_build(impl, pos);
-    }		
+    void build(double x, double y, std::vector<double> const& other=std::vector<double>());
 
     void clip() {
 	psf_clip(impl);

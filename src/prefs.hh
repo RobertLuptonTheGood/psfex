@@ -35,8 +35,9 @@ public:
    enum	{HOMOBASIS_NONE = prefstruct::HOMOBASIS_NONE,
 	 HOMOBASIS_GAUSSLAGUERRE = prefstruct::HOMOBASIS_GAUSSLAGUERRE};
 #endif
-   enum {VAR_NONE =  prefstruct::VAR_NONE,
-	 VAR_SEEING = prefstruct::VAR_SEEING};
+   enum {QUIET = prefstruct::QUIET, NORM = prefstruct::NORM,
+	 LOG = prefstruct::LOG, FULL = prefstruct::FULL};
+   enum {VAR_NONE =  prefstruct::VAR_NONE, VAR_SEEING = prefstruct::VAR_SEEING};
 
    enum {_ALL_EXTENSIONS = ALL_EXTENSIONS,
          #undef ALL_EXTENSIONS
@@ -79,7 +80,7 @@ public:
    char *getPhotfluxerrRkey() const { return impl.photfluxerr_rkey; }
    int   getPhotfluxerrNum() const { return impl.photfluxerr_num; }
    int   getProfAccuracy() const { return impl.prof_accuracy; }
-   
+   int   getVerboseType() const { return impl.verbose_type; }
    
    std::vector<std::string> const& getContextName() const { return _context_names; }
    std::vector<int> const& getContextGroup() const { return _context_groups; }

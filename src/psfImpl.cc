@@ -98,4 +98,29 @@ Psf::~Psf() {
 #endif
 }
 
+void
+Psf::build(double x, double y,
+           std::vector<double> const& other)
+{
+    std::vector<double> pos(2);
+    pos[0] = x; pos[1] = y;
+
+    pos.insert(pos.end(), other.begin(), other.end());
+    
+    for (int i = 0; i != pos.size(); ++i) {
+        pos[i] = (pos[i] - impl->contextoffset[i])/impl->contextscale[i];
+    }
+
+    psf_build(impl, &pos[0]);
+}		
+
+ndarray::Array<float,2,2>
+Psf::getLoc() const
+{
+    ndarray::Array<float,2,2>::Index shape = ndarray::makeVector(impl->size[0], impl->size[1]);
+    ndarray::Array<float,2,2>::Index strides = ndarray::makeVector(1, impl->size[0]);
+
+    return ndarray::external(impl->loc, shape, strides);
+}
+
 }}
