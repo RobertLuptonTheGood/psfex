@@ -41,12 +41,12 @@ public:
     void addExt(lsst::afw::image::Wcs const& wcs, int const naxis1, int const naxis2, int const nobj=0);
     
     /// Return the number of extensions
-    int getNext() const { return impl.next; }
+    int getNext() const { return impl->next; }
     /// Return the Psfs
     std::vector<Psf> const& getPsfs() const;
     
 private:
-   fieldstruct &impl;
+   fieldstruct *impl;
    mutable std::vector<Psf> _psfs;
    mutable bool _isInitialized;
 

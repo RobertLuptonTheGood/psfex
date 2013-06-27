@@ -59,17 +59,17 @@ Field::addExt(lsst::afw::image::Wcs const& wcs_,
               int const naxis1, int const naxis2,
               int const nobj)
 {
-    QREALLOC(impl.psf, psfstruct *, impl.next);
-    impl.psf[impl.next] = 0;
-    QREALLOC(impl.wcs, wcsstruct *, impl.next);
-    impl.wcs[impl.next] = 0;
+    QREALLOC(impl->psf, psfstruct *, impl->next);
+    impl->psf[impl->next] = 0;
+    QREALLOC(impl->wcs, wcsstruct *, impl->next);
+    impl->wcs[impl->next] = 0;
     /*
      * We're going to fake psfex's wcsstruct object.  We only need enough of it for field_locate
      */
     PsfUnpack wcsUnpacked(wcs_);
     struct wcsprm const* wcsPrm = wcsUnpacked.getWcsInfo();
-    QMALLOC(impl.wcs[impl.next], wcsstruct, 1);
-    wcsstruct *wcs = impl.wcs[impl.next];
+    QMALLOC(impl->wcs[impl->next], wcsstruct, 1);
+    wcsstruct *wcs = impl->wcs[impl->next];
     
     wcs->naxis = wcsPrm->naxis;
     wcs->naxisn[0] = naxis1;
@@ -95,9 +95,9 @@ Field::addExt(lsst::afw::image::Wcs const& wcs_,
     wcs->lng = wcsPrm->lng;
     wcs->equinox = wcsPrm->equinox;
 
-    impl.ndet += nobj;
+    impl->ndet += nobj;
     
-    ++impl.next;
+    ++impl->next;
 }
 
 extern "C" {
@@ -111,7 +111,7 @@ makeit(std::vector<Field *> &fields_,
 {
     std::vector<fieldstruct *> fields(fields_.size());
     for (int i = 0; i != fields.size(); ++i) {
-        fields[i] = &fields_[i]->impl;
+        fields[i] = fields_[i]->impl;
     }
     /*
      * We are going to scribble on prefs.incat_name to replace the array of (char*) with
