@@ -567,8 +567,8 @@ if __name__ == "__main__":
     import lsst.afw.display.utils as ds9Utils
     nx, ny = 13, 10
     mos = ds9Utils.Mosaic(gutter=2, background=0.02)
-    for x in np.linspace(0, naxis1, nx):
-        for y in np.linspace(0, naxis2, ny):
+    for y in np.linspace(0, naxis1, ny):
+        for x in np.linspace(0, naxis2, nx):
             psf.build(x, y)
 
             im = afwImage.ImageF(*psf.getLoc().shape)
