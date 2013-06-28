@@ -848,8 +848,10 @@ void	psf_makeresi(psfstruct *psf, setstruct *set, int centflag,
 /*printf("%g\n", mse);*/
   QMALLOC(fresi, float, npix); 
   nm1 = nsample > 1?  (double)(nsample - 1): 1.0;
-  for (dresit=dresi,fresit=fresi, i=npix; i--;)
-      *(fresit++) = sqrt(*(dresit++)/nm1);
+  for (dresit=dresi,fresit=fresi, i=npix; i--;) {
+     float const val = *dresit++;
+     *(fresit++) = val > 0 ? sqrt(val/nm1) : -sqrt(-val/nm1);
+  }
 
 /*-- Map the residuals to PSF coordinates */
   vignet_resample(fresi, set->vigsize[0], set->vigsize[1],
