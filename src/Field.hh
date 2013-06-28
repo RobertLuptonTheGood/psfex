@@ -43,10 +43,10 @@ public:
     /// Return the number of extensions
     int getNext() const { return impl->next; }
     /// Return the Psfs
-    std::vector<Psf> const& getPsfs() const;
+    std::vector<Psf> getPsfs() const;
     
 private:
-   fieldstruct *impl;
+   boost::shared_ptr<fieldstruct> impl;
    mutable std::vector<Psf> _psfs;
    mutable bool _isInitialized;
 

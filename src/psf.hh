@@ -4,11 +4,13 @@
 
 #include <string>
 #include <vector>
+#include "boost/shared_ptr.hpp"
 
 extern "C" {
 #include "context.h"
 #include "psf.h"
 #include "sample.h"
+typedef struct field fieldstruct;
 }
 
 namespace ndarray {
@@ -127,7 +129,8 @@ private:
  */
 class Psf {
 public:
-    Psf(psfstruct *psf=0) : impl(psf) {}
+    Psf() : impl(0), _owner(boost::shared_ptr<fieldstruct>()) {}
+    Psf(psfstruct *psf, boost::shared_ptr<fieldstruct> owner) : impl(psf), _owner(owner) {}
     ~Psf();
     
     ndarray::Array<float,2,2> getLoc() const;
@@ -144,6 +147,7 @@ public:
     
 private:
     psfstruct *impl;
+    boost::shared_ptr<fieldstruct> _owner;
 };
 
 }}
