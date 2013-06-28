@@ -2,6 +2,16 @@
 #include "psf.hh"
 #include "ndarray.h"
 
+#define RETURN_IMAGE_FIELD(NAME, CNAME, SIZE) \
+     ndarray::Array<float,2,2> \
+     NAME() const         \
+     { \
+        ndarray::Array<float,2,2>::Index shape = ndarray::makeVector(SIZE[0], SIZE[1]); \
+        ndarray::Array<float,2,2>::Index strides = ndarray::makeVector(1, SIZE[0]); \
+        \
+        return ndarray::external(impl->CNAME, shape, strides); \
+    }
+
 namespace astromatic { namespace psfex {
 
 Context::Context(std::vector<std::string> const& names,
@@ -46,11 +56,17 @@ std::vector<double> & Context::getPc(int const i) const
 }
 
 /************************************************************************************************************/
+
 void Sample::setVig(ndarray::Array<float,2,2> const& img)
 {
     memcpy(impl->vig, &img(0,0), img.getSize<0>()*img.getSize<1>()*sizeof(float));
 }
 
+RETURN_IMAGE_FIELD(Sample::getVig,       vig,       _vigsize)
+RETURN_IMAGE_FIELD(Sample::getVigResi,   vigresi,   _vigsize)
+RETURN_IMAGE_FIELD(Sample::getVigChi,    vigchi,    _vigsize)
+RETURN_IMAGE_FIELD(Sample::getVigWeight, vigweight, _vigsize)
+        
 /************************************************************************************************************/
 
 Set::Set(Context &c) {
@@ -73,7 +89,7 @@ Set::newSample()
             realloc_samples(impl, impl->nsamplemax);
         }
     }
-    return Sample(&impl->sample[impl->nsample++]);
+    return Sample(&impl->sample[impl->nsample++], impl->vigsize);
 }
         
 void
@@ -114,13 +130,7 @@ Psf::build(double x, double y,
     psf_build(impl, &pos[0]);
 }		
 
-ndarray::Array<float,2,2>
-Psf::getLoc() const
-{
-    ndarray::Array<float,2,2>::Index shape = ndarray::makeVector(impl->size[0], impl->size[1]);
-    ndarray::Array<float,2,2>::Index strides = ndarray::makeVector(1, impl->size[0]);
-
-    return ndarray::external(impl->loc, shape, strides);
-}
+RETURN_IMAGE_FIELD(Psf::getLoc,  loc,  impl->size)
+RETURN_IMAGE_FIELD(Psf::getResi, resi, impl->size)
 
 }}

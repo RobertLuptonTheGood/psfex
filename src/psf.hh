@@ -2,6 +2,8 @@
 #if !defined(ASTROMATIC_PSFEX_PSF_HH)
 #define ASTROMATIC_PSFEX_PSF_HH
 
+#include <stdexcept>
+#include <sstream>
 #include <string>
 #include <vector>
 #include "boost/shared_ptr.hpp"
@@ -64,11 +66,20 @@ public:
     void setY(double val) { impl->y = val; impl->dy = impl->y - (int)(impl->y + 0.49999); }
     void setContext(int i, double val) { impl->context[i] = val; }
     void setFluxrad(float val) { _fluxrad = val; }
+
+    ndarray::Array<float,2,2> getVig() const;
+    ndarray::Array<float,2,2> getVigResi() const;
+    ndarray::Array<float,2,2> getVigChi() const;
+    ndarray::Array<float,2,2> getVigWeight() const;
+    std::pair<double, double> getXY() const { return std::pair<double,double>(impl->x, impl->y); }
+    float getNorm() const { return impl->norm; }
+    
 private:
-    Sample(samplestruct *s) : impl(s) { }
+    Sample(samplestruct *s, int *vigsize) : impl(s), _vigsize(vigsize) { }
 
     samplestruct *impl;
     float _fluxrad;                     // needed by recenter_sample
+    int *_vigsize;                      // needed to make sense of the arrays
 };
 
 /************************************************************************************************************/
@@ -119,6 +130,15 @@ public:
     int  getBadElong() const { return impl->badelong; }
     void setBadPix(int n) { impl->badpix = n; }
     int  getBadPix() const { return impl->badpix; }
+    Sample getSample(int i) const {
+        if (i < 0 || i > impl->nsample) {
+            std::ostringstream s1;
+            s1 << "Index " << i << " is out of range 0.." << impl->nsample - 1;
+            throw std::out_of_range(s1.str());
+        }
+
+        return Sample(&impl->sample[i], impl->vigsize);
+    }
 
 private:
     setstruct *impl;
@@ -134,11 +154,15 @@ public:
     ~Psf();
     
     ndarray::Array<float,2,2> getLoc() const;
-
+    ndarray::Array<float,2,2> getResi() const;
+#if 0
     void make(Set &s, double prof_accuracy) {
         psf_make(impl, s.impl, prof_accuracy);
     }
-
+    void makeresi(Set &s, double prof_accuracy, int centflag=0) {
+        psf_makeresi(impl, s.impl, centflag, prof_accuracy);
+    }
+#endif
     void build(double x, double y, std::vector<double> const& other=std::vector<double>());
 
     void clip() {

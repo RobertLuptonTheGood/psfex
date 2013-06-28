@@ -42,7 +42,14 @@ static double PSFEX_SAVE_INTERPFAC = INTERPFAC;
 %template(vectorStr) std::vector<std::string>;
 
 %declareNumPyConverters(ndarray::Array<float,2,2>);
-%declareNumPyConverters(ndarray::Array<const float,2,2>);
+
+%exception astromatic::psfex::Set::getSample {
+   try {
+      $action
+   } catch (const std::out_of_range& e) {
+      SWIG_exception(SWIG_IndexError, e.what());
+   }
+}
 
 %include "Field.hh"
 %include "prefs.hh"

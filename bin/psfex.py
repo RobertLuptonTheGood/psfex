@@ -579,14 +579,19 @@ if __name__ == "__main__":
 
     mosaic = mos.makeMosaic(mode=nx)
     ds9.mtv(mosaic)
+
+    mos = ds9Utils.Mosaic(gutter=4, background=0.002)
+    for i in range(set.getNsample()):
+        s = set.getSample(i)
     
-    if False:
-        while True:
-            im = afwImage.ImageF(*psf.getLoc().shape)
-            im.getArray()[:] = psf.getLoc()
-            im /= float(im.getArray().max())
-            ds9.mtv(im)
-            
-        import pdb; pdb.set_trace()
-    else:
-        import pdb; pdb.set_trace() 
+        smos = ds9Utils.Mosaic(gutter=2, background=-0.003)
+        for func in [s.getVig, s.getVigResi]:
+            arr = func()
+            arr /= s.getNorm()
+            im = afwImage.ImageF(*arr.shape)
+            im.getArray()[:] = arr
+            smos.append(im)
+
+        mos.append(smos.makeMosaic(mode="x"))
+        
+    mosaic = mos.makeMosaic(frame=1)
