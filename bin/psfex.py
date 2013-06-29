@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+import os
 import sys
 from astromatic.psfex.utils import *
 try:
@@ -476,40 +477,64 @@ def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1):
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def showPsf(psf, set, frame=None):
+def showPsf(psf, set, wcs=None, naxis1=None, naxis2=None, trim=0, frame=None, title=None):
     """Show a PSF on ds9"""
-    naxis1 = None
-    for cat in prefs.getCatalogs():
-        if naxis1 is not None:
-            break
-        with pyfits.open(cat) as pf:
-            for hdu in pf:
-                if hdu.name == "LDAC_IMHEAD":
-                    hdr = hdu.data[0][0]    # the fits header from the original fits image
-                    md = dafBase.PropertySet()
-                    for line in hdr:
-                        try:
-                            md.set(*splitFitsCard(line))
-                        except AttributeError:
-                            continue
-                    naxis1, naxis2 = md.get("NAXIS1"), md.get("NAXIS2")
-                    break
-    
+
+    naxis = [naxis1, naxis2]
+    for i in range(2):
+        if naxis[i] is None:
+            # cmin, cmax are the range of input star positions
+            cmin, cmax = [set.getContextOffset(i) + d*set.getContextScale(i) for d in (-0.5, 0.5)]
+            naxis[i] = cmax + cmin          # a decent guess
+  
     import lsst.afw.display.utils as ds9Utils
-    nx, ny = 13, 10
+    nspot = 5
+    if naxis[0] > naxis[1]:
+        nx, ny = int(nspot*naxis[0]/float(naxis[1]) + 0.5), nspot
+    else:
+        nx, ny = nspot, int(nspot*naxis[1]/float(naxis[0]) + 0.5)
+
     mos = ds9Utils.Mosaic(gutter=2, background=0.02)
-    for y in np.linspace(0, naxis1, ny):
-        for x in np.linspace(0, naxis2, nx):
+
+    xpos, ypos = np.linspace(0, naxis[0], nx), np.linspace(0, naxis[1], ny)
+    for y in ypos:
+        for x in xpos:
             psf.build(x, y)
 
             im = afwImage.ImageF(*psf.getLoc().shape)
             im.getArray()[:] = psf.getLoc()
             im /= float(im.getArray().max())
+            if trim:
+                if trim > im.getHeight()//2:
+                    trim = im.getHeight()//2
+
+                im = im[trim:-trim, trim:-trim]
             
             mos.append(im)
 
     mosaic = mos.makeMosaic(mode=nx)
-    ds9.mtv(mosaic, frame=frame)
+    ds9.mtv(mosaic, frame=frame, title=title)
+    #
+    # Figure out the WCS for the mosaic
+    #
+    pos = []
+    for x, y, i in zip((xpos[0], xpos[-1]), (ypos[0], ypos[-1]), (0, mos.nImage - 1)):
+        bbox = mos.getBBox(i)
+        mosx, mosy = bbox.getMinX() + 0.5*(bbox.getWidth() - 1), bbox.getMinY() + 0.5*(bbox.getHeight() - 1)
+        import lsst.afw.geom as afwGeom
+        pos.append([afwGeom.PointD(mosx, mosy), wcs.pixelToSky(afwGeom.PointD(x, y))])
+
+    CD = []
+    for i in range(2):
+        delta = pos[1][1][i].asDegrees() -  pos[0][1][i].asDegrees()
+        CD.append(delta/(pos[1][0][i] - pos[0][0][i]))
+    mosWcs = afwImage.makeWcs(pos[0][1], pos[0][0], CD[0], 0, 0, CD[1])
+
+    ds9.mtv(mosaic, frame=frame, title=title, wcs=mosWcs)
+
+    mosaic.writeFits("%s-mod.fits" % title, mosWcs.getFitsMetadata())
+
+    #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
     mos = ds9Utils.Mosaic(gutter=4, background=0.002)
     for i in range(set.getNsample()):
@@ -525,17 +550,19 @@ def showPsf(psf, set, frame=None):
 
         mos.append(smos.makeMosaic(mode="x"))
         
-    mosaic = mos.makeMosaic(frame=frame+1)
+    mosaic = mos.makeMosaic(title=title, frame=frame+1)
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def makeit(prefs, context):
+def makeit(prefs, context, saveWcs=False):
     # Create an array of PSFs (one PSF for each extension)
     if prefs.getVerboseType() != prefs.QUIET:
         print "----- %d input catalogues:" % prefs.getNcat()
 
-    fields = psfex.vectorField()
-    
+    if saveWcs:                         # only needed for making plots
+        wcss = []
+
+    fields = psfex.vectorField()    
     for cat in prefs.getCatalogs():
         field = psfex.Field(cat)
         with pyfits.open(cat) as pf:
@@ -561,6 +588,8 @@ def makeit(prefs, context):
                     nobj = len(hdu.data)
 
             field.addExt(wcs, naxis1, naxis2, nobj)
+            if saveWcs:
+                wcss.append((wcs, naxis1, naxis2))
 
         field.finalize()
         fields.append(field)
@@ -588,7 +617,11 @@ def makeit(prefs, context):
 
     psfex.makeit(fields, sets)
 
-    return [f.getPsfs() for f in fields], sets
+    ret = [[f.getPsfs() for f in fields], sets]
+    if saveWcs:
+        ret.append(wcss)
+
+    return ret
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PSFEX")
@@ -626,9 +659,10 @@ if __name__ == "__main__":
                             prefs.getGroupDeg(),
                             psfex.Context.REMOVEHIDDEN if False else psfex.Context.KEEPHIDDEN)
 
-    psfs, sets = makeit(prefs, context)
+    psfs, sets, wcss = makeit(prefs, context, saveWcs=True)
 
     if args.ds9 is not None:
         for i in range(len(sets)):
             ext = 0
-            showPsf(psfs[i][ext], sets[i], frame=args.ds9 + i*len(sets))
+            showPsf(psfs[i][ext], sets[i], *wcss[i], trim=5, frame=args.ds9 + i*len(sets),
+                    title=os.path.splitext(os.path.split(prefs.getCatalogs()[i])[1])[0])
