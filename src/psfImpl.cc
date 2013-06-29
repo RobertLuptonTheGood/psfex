@@ -84,11 +84,9 @@ Set::newSample()
 {
     if (impl->nsample >= impl->nsamplemax) {
         if (impl->nsamplemax == 0) {
-            impl->nsamplemax = LSAMPLE_DEFSIZE;
-            malloc_samples(impl, impl->nsamplemax);
+            malloc_samples(impl, LSAMPLE_DEFSIZE);
         } else {
-            impl->nsamplemax = (int)(1.62*impl->nsamplemax + 1);
-            realloc_samples(impl, impl->nsamplemax);
+            realloc_samples(impl, (int)(1.62*impl->nsamplemax + 1));
         }
     }
     return Sample(&impl->sample[impl->nsample++], impl->vigsize);
