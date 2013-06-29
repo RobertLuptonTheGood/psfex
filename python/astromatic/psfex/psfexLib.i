@@ -43,12 +43,14 @@ static double PSFEX_SAVE_INTERPFAC = INTERPFAC;
 
 %declareNumPyConverters(ndarray::Array<float,2,2>);
 
+%exception astromatic::psfex::Context::getPc {
+   try { $action } catch (const std::out_of_range& e) { SWIG_exception(SWIG_IndexError, e.what()); }
+}
 %exception astromatic::psfex::Set::getSample {
-   try {
-      $action
-   } catch (const std::out_of_range& e) {
-      SWIG_exception(SWIG_IndexError, e.what());
-   }
+   try { $action } catch (const std::out_of_range& e) { SWIG_exception(SWIG_IndexError, e.what()); }
+}
+%exception astromatic::psfex::Psf::build {
+   try { $action } catch (const std::out_of_range & e) { SWIG_exception(SWIG_IndexError, e.what()); }
 }
 
 %include "Field.hh"

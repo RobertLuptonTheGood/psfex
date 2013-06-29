@@ -43,8 +43,10 @@ Context::~Context() {
 
 std::vector<double> & Context::getPc(int const i) const
 {
-    if (i >= impl->npc) {
-        throw;
+    if (i < 0 || i >= impl->npc) {
+        std::ostringstream s1;
+        s1 << "Index " << i << " is out of range 0.." << impl->npc - 1;
+        throw std::out_of_range(s1.str());
     }
     if (_pc_vectors[i].empty()) {
         _pc_vectors[i].reserve(impl->npc);
@@ -118,6 +120,10 @@ void
 Psf::build(double x, double y,
            std::vector<double> const& other)
 {
+    if (!impl->contextoffset) {         // we never set context{offset,scale}
+        throw std::out_of_range("psf.contextoffset not set (probably no valid stars) so I can't index it");
+    }
+
     std::vector<double> pos(2);
     pos[0] = x; pos[1] = y;
 
