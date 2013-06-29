@@ -312,8 +312,8 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
 
     #---- Update min and max
     for j in range(set.getNcontext()):
-        cmin[j] = contextvalp[j].min()
-        cmax[j] = contextvalp[j].max()
+        cmin[j] = contextvalp[j][good].min()
+        cmax[j] = contextvalp[j][good].max()
 
     # Update the scaling
     if set.getNsample():
@@ -380,7 +380,7 @@ def load_samples(prefs, context, catindex=0, ext=psfex.Prefs.ALL_EXTENSIONS, nex
                                 continue
                             
                             if k == "SEXBKDEV":
-                                if v > 1/psfex.cvar.BIG:
+                                if v < 1/psfex.cvar.BIG:
                                     v = 1.0
 
                                 backnoises.append(v)

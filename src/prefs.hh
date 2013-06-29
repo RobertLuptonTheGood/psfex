@@ -54,7 +54,7 @@ public:
 
    void setCommandLine(std::vector<std::string> const& argv);
    int getNcat() const { return impl.ncat; }
-   int getPsfStep() const { return impl.psf_step; }
+   double getPsfStep() const { return impl.psf_step; }
 #if 0
    int getNgroupDeg() const { return impl.ngroup_deg; }
    int getNewbasisType() const { return impl.newbasis_type; }
@@ -79,7 +79,7 @@ public:
    int   getPhotfluxNum() const { return impl.photflux_num; }
    char *getPhotfluxerrRkey() const { return impl.photfluxerr_rkey; }
    int   getPhotfluxerrNum() const { return impl.photfluxerr_num; }
-   int   getProfAccuracy() const { return impl.prof_accuracy; }
+   double getProfAccuracy() const { return impl.prof_accuracy; }
    int   getVerboseType() const { return impl.verbose_type; }
    
    std::vector<std::string> const& getContextName() const { return _context_names; }
