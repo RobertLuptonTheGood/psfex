@@ -83,7 +83,6 @@ def compute_fwhmrange(fwhm, maxvar, minin, maxin, plot=dict()):
 def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcval,
                  plot=dict()):
     """N.b. plot=dict(showFlags=True)"""
-    # N.b. ncat is function static!
 
     maxbad = prefs.getBadpixNmax()
     maxbadflag = prefs.getBadpixFlag()
@@ -93,16 +92,13 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
     # allocate a new set iff set is None
     if not set:
 	set = psfex.Set(context)
-	ncat = 1
-    else:
-        raise RuntimeError("Implement me")
 
     cmin, cmax = None, None
     if set.getNcontext():
         cmin = np.empty(set.getNcontext())
         cmax = np.empty(set.getNcontext())
         for i in range(set.getNcontext()):
-	    if ncat > 1 and set.getNsample():
+	    if set.getNsample():
 		cmin[i] = set.getContextOffset(i) - set.getContextScale(i)/2.0;
 		cmax[i] = cmin[i] + set.getContextScale(i);
 	    else:
@@ -203,8 +199,6 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
                                                (key, filename))
                         set.setContextname(i, key)
 
-                str2 = "[%d/%d]" %(ext+1, next) if next > 1 else ""
-
     # Now examine each vector of the shipment
     sn = flux/np.where(fluxerr > 0, fluxerr, 1)
     sn[fluxerr < 0] = psfex.cvar.BIG
@@ -286,7 +280,7 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
 
         raw_input("Continue? ")
     #
-    # Create our sample of stars
+    # Insert our sample of stars into the set
     #
     if not vignet.dtype.isnative:
         # without the swap setVig fails with "ValueError: 'unaligned arrays cannot be converted to C++'"
@@ -325,21 +319,21 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
     # Don't waste memory!
     set.trimMemory()
 
-    # Increase the current catalog number
-    ncat += 1
-
     return set
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def load_samples(prefs, context, catindex=0, ext=psfex.Prefs.ALL_EXTENSIONS, next=1):
+def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1):
     minsn = prefs.getMinsn()
     maxelong = (prefs.getMaxellip() + 1.0)/(1.0 - prefs.getMaxellip()) if prefs.getMaxellip() < 1.0 else 100
     min = prefs.getFwhmrange()[0]
     max = prefs.getFwhmrange()[1]
 
     filenames = prefs.getCatalogs()
-    ncat = len(filenames)
+
+    catindexes = range(len(filenames))  # Do we need this variable?
+
+    ncat = len(catindexes)
     fwhmmin = np.empty(ncat)
     fwhmmax = np.empty(ncat)
     fwhmode = np.empty(ncat)
@@ -350,14 +344,13 @@ def load_samples(prefs, context, catindex=0, ext=psfex.Prefs.ALL_EXTENSIONS, nex
         #-- Try to estimate the most appropriate Half-light Radius range
         #-- Get the Half-light radii
 	nobj = 0
-        for i in range(ncat):
+        for i, icat in enumerate(catindexes):
             fwhms[i] = []
                 
             if prefs.getVerboseType() != prefs.QUIET:
                 print "Examining Catalog #%d" % (i+1)
-            #---- Read input catalog
-	    icat = catindex + i
 
+            #---- Read input catalog
 	    backnoises = []
             with pyfits.open(filenames[icat]) as cat:
                 extCtr = -1
@@ -437,52 +430,53 @@ def load_samples(prefs, context, catindex=0, ext=psfex.Prefs.ALL_EXTENSIONS, nex
         fwhmmax = np.zeros(ncat) + prefs.getFwhmrange()[1]
         fwhmmode = (fwhmmin + fwhmmax)/2.0
 
-    # Load the samples
-    mode = psfex.cvar.BIG
+    # Read the samples
+    mode = psfex.cvar.BIG               # mode of FWHM distribution
 
-    set = None
-    for i in range(ncat):
-	icat = catindex + i
+    sets = []
+    for i, icat in enumerate(catindexes):
+        set = None
 	if ext == prefs.ALL_EXTENSIONS:
-            for e in range(len(backnoises)):
-		set = read_samples(set, filenames[icat], fwhmmin[i]/2.0, fwhmmax[i]/2.0,
-				   e, next, icat, context, context.getPc(i) if context.getNpc() else None);
-
-                print "Skipping further HDUs"
-                break
+            extensions = range(len(backnoises))
 	else:
-	    set = read_samples(set, filenames[icat], fwhmmin[i]/2.0, fwhmmax[i]/2.0,
-			       ext, next, icat, context, context.getPc(i) if context.getNpc() else None)
+            extensions = [ext]
+
+        for e in extensions:
+            set = read_samples(set, filenames[icat], fwhmmin[i]/2.0, fwhmmax[i]/2.0,
+                               e, next, icat, context, context.getPc(i) if context.getNpc() else None);
+
+        sets.append(set)
+
 	if fwhmmode[i] < mode:
 	    mode = fwhmmode[i]
 
-    set.setFwhm(mode)
+        set.setFwhm(mode)
 
-    if prefs.getVerboseType() != prefs.QUIET:
-        print "%d samples loaded." % set.getNsample()
+        if prefs.getVerboseType() != prefs.QUIET:
+            print "%d samples loaded." % set.getNsample()
 
-    if not set.getNsample():
-	print >> sys.stderr, "No appropriate source found!!"
+        if not set.getNsample():
+            print >> sys.stderr, "No appropriate source found!!"
 
-    if False:
-        if (set.badflags):
-            print "%d detections discarded with bad SExtractor flags" % set.badflags
-            if set.badsn:
-                print "%d detections discarded with S/N too low" % set.badsn
-        if set.badfrmin:
-            print "%d detections discarded with FWHM too small" % set.badfrmin
-        if set.badfrmax:
-            print "%d detections discarded with FWHM too large" % set.badfrmax
-        if set.badelong:
-            print "%d detections discarded with elongation too high" % set.badelong
-        if set.badpix:
-            print "%d detections discarded with too many bad pixels\n\n" % set.badpix
+        if False:
+            if (set.badflags):
+                print "%d detections discarded with bad SExtractor flags" % set.badflags
+                if set.badsn:
+                    print "%d detections discarded with S/N too low" % set.badsn
+            if set.badfrmin:
+                print "%d detections discarded with FWHM too small" % set.badfrmin
+            if set.badfrmax:
+                print "%d detections discarded with FWHM too large" % set.badfrmax
+            if set.badelong:
+                print "%d detections discarded with elongation too high" % set.badelong
+            if set.badpix:
+                print "%d detections discarded with too many bad pixels\n\n" % set.badpix
 
-    return set
+    return sets
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def showPsf(psf, frame=None):
+def showPsf(psf, set, frame=None):
     """Show a PSF on ds9"""
     naxis1 = None
     for cat in prefs.getCatalogs():
@@ -535,12 +529,13 @@ def showPsf(psf, frame=None):
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def makeit(prefs, set):
+def makeit(prefs, context):
     # Create an array of PSFs (one PSF for each extension)
     if prefs.getVerboseType() != prefs.QUIET:
         print "----- %d input catalogues:" % prefs.getNcat()
 
-    fields = []
+    fields = psfex.vectorField()
+    
     for cat in prefs.getCatalogs():
         field = psfex.Field(cat)
         with pyfits.open(cat) as pf:
@@ -579,22 +574,21 @@ def makeit(prefs, set):
         psfbasis = None
         psfbasiss = None
 
-    sets = [set]
+    sets = []
+    for set in load_samples(prefs, context):
+        sets.append(set)
+
     if True:                            # swig should be able to handle [Field], but it can't.
                                         # this is a problem in my bindings and/or a swig bug
-        _fields = fields
-        fields = psfex.vectorField()
-        for f in _fields:
-            fields.push_back(f)
 
         _sets = sets                    # and [Set] too
         sets = psfex.vectorSet()
-        for f in _sets:
-            sets.push_back(f)
+        for s in _sets:
+            sets.push_back(s)
 
     psfex.makeit(fields, sets)
 
-    return [f.getPsfs() for f in fields]
+    return [f.getPsfs() for f in fields], sets
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PSFEX")
@@ -604,7 +598,7 @@ if __name__ == "__main__":
                         help="File containing default parameters", default="default.psfex")
     parser.add_argument('--overrides', type=str, nargs="+",
                         help="Overrides for default parameters", default=[])
-    parser.add_argument('--frame', type=int, 
+    parser.add_argument('--ds9', type=int, 
                         help="Show the PSF on ds9", default=None)
     parser.add_argument('--verbose', action="store_true", help="How chatty should I be?", default=False)
     
@@ -629,10 +623,12 @@ if __name__ == "__main__":
     prefs.use()
 
     context = psfex.Context(prefs.getContextName(), prefs.getContextGroup(),
-                            prefs.getGroupDeg(), psfex.Context.REMOVEHIDDEN))
-    set = load_samples(prefs, context)
+                            prefs.getGroupDeg(),
+                            psfex.Context.REMOVEHIDDEN if False else psfex.Context.KEEPHIDDEN)
 
-    psfs = makeit(prefs, set)
+    psfs, sets = makeit(prefs, context)
 
-    if args.frame is not None:
-        showPsf(psfs[0][0], frame=args.frame)
+    if args.ds9 is not None:
+        for i in range(len(sets)):
+            ext = 0
+            showPsf(psfs[i][ext], sets[i], frame=args.ds9 + i*len(sets))
