@@ -27,7 +27,7 @@ def splitFitsCard(line):
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def compute_fwhmrange(fwhm, maxvar, minin, maxin, plot=dict(x=1)):
+def compute_fwhmrange(fwhm, maxvar, minin, maxin, plot=dict()):
     """
 	PURPOSE Compute the FWHM range associated to a series of FWHM measurements.
 	INPUT   Pointer to an array of FWHMs,
@@ -81,7 +81,8 @@ def compute_fwhmrange(fwhm, maxvar, minin, maxin, plot=dict(x=1)):
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcval,
-                 plot=dict(showFlags=True)):
+                 plot=dict()):
+    """N.b. plot=dict(showFlags=True)"""
     # N.b. ncat is function static!
 
     maxbad = prefs.getBadpixNmax()
