@@ -25,3 +25,6 @@ stamp-h1
 python/astromatic/psfex/psfexLib_wrap.*
 python/astromatic/psfex/psfexLib.py
 python/astromatic/psfex/version.py
+
+psfex.xml
+sc*-mod.fits
