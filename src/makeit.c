@@ -66,8 +66,10 @@ void	makeit(void)
    fieldstruct		**fields;
    contextstruct	*context, *fullcontext;
    struct tm		*tm;
-   char			**incatnames;
-   int			c,ncat;
+   char                 str[MAXCHAR];
+   char			**incatnames,
+			*pstr;
+   int			c,ext, next, ncat;
 
 /* Install error logging */
   error_installfunc(write_error);
@@ -132,6 +134,7 @@ void	makeit(void)
   QPRINTF(OUTPUT, "\n");
 
   makeit_body(fields, &context, &fullcontext, 1);
+  next = fields[0]->next;
 
 /* Save result */
   for (c=0; c<ncat; c++)

@@ -404,7 +404,6 @@ makeit_body(
 	psf->pfmoffat_residuals,
 	psf->sym_residuals);
 /*---- Save "Check-images" */
-#if 0
       for (i=0; i<prefs.ncheck_type; i++)
         if (prefs.check_type[i])
           {
@@ -413,7 +412,6 @@ makeit_body(
           check_write(fields[c], set2, prefs.check_name[i], prefs.check_type[i],
 		ext, next, prefs.check_cubeflag);
           }
-#endif
 /*---- Free memory */
       if (free_sets) end_set(set2);
       }

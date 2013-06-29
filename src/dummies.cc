@@ -16,6 +16,12 @@ psf_savehomo(psfstruct *psf, char *filename, int ext, int next)
 }
 
 void
+check_write(fieldstruct *, setstruct *, char *, checkenum, int, int, int)
+{
+    ;
+}
+    
+void
 end_wcs(wcsstruct *)
 {
     ;
