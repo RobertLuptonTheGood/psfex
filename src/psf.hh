@@ -37,7 +37,6 @@ public:
     Context(std::vector<std::string> const& names, ///< names of fields to use
             std::vector<int> const& group,         ///< tags for each member of names
             std::vector<int> const& degree,        ///< polynomial degree for each group
-            int ngroup,                            ///< number of groups
             bool pcexflag                          ///< exclude PCA components?
            );
     ~Context();

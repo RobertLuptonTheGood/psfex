@@ -628,7 +628,9 @@ if __name__ == "__main__":
 
     prefs.use()
 
-    set = load_samples(prefs, psfex.Context(prefs.getContextName(), [1, 1], [2], 1, True))
+    context = psfex.Context(prefs.getContextName(), prefs.getContextGroup(),
+                            prefs.getGroupDeg(), psfex.Context.REMOVEHIDDEN))
+    set = load_samples(prefs, context)
 
     psfs = makeit(prefs, set)
 

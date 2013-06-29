@@ -17,12 +17,12 @@ namespace astromatic { namespace psfex {
 Context::Context(std::vector<std::string> const& names,
                  std::vector<int> const& group,
                  std::vector<int> const& degree,
-                 int ngroup,
                  bool pcexflag
                 )
 {
     _names = names;
     int const ndim = names.size();
+    int const ngroup = group.size();
 
     std::vector<const char *> cnames(ndim);
     for (int i = 0; i != ndim; ++i) {
