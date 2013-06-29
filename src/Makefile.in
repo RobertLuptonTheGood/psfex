@@ -81,18 +81,18 @@ am__installdirs = "$(DESTDIR)$(bindir)"
 binPROGRAMS_INSTALL = $(INSTALL_PROGRAM)
 PROGRAMS = $(bin_PROGRAMS)
 am__psfex_SOURCES_DIST = check.c context.c cplot.c diagnostic.c fft.c \
-	field.c field_utils.c fitswcs.c homo.c main.c makeit.c makeitImpl.c misc.c pca.c poly.c \
-	prefs.c psf.c psf_io.c sample.c vignet.c xml.c check.h context.h \
+	field.c field_utils.c fitswcs.c homo.c homoIo.c main.c makeit.c makeitImpl.c misc.c pca.c poly.c \
+	prefs.c psf.c psf_io.c sample.c utils.c vignet.c xml.c check.h context.h \
 	cplot.h define.h diagnostic.h fft.h field.h fitswcs.h \
 	globals.h homo.h key.h misc.h pca.h poly.h prefs.h preflist.h \
 	psf.h sample.h threads.h types.h vignet.h wcscelsys.h xml.h
 @USE_PLPLOT_TRUE@am__objects_1 = cplot.$(OBJEXT)
 am_psfex_OBJECTS = check.$(OBJEXT) context.$(OBJEXT) $(am__objects_1) \
 	diagnostic.$(OBJEXT) fft.$(OBJEXT) field.$(OBJEXT) field_utils.$(OBJEXT) \
-	fitswcs.$(OBJEXT) homo.$(OBJEXT) main.$(OBJEXT) \
+	fitswcs.$(OBJEXT) homo.$(OBJEXT) homoIo.$(OBJEXT) main.$(OBJEXT) \
 	makeit.$(OBJEXT) makeitImpl.$(OBJEXT) misc.$(OBJEXT) pca.$(OBJEXT) poly.$(OBJEXT) \
 	prefs.$(OBJEXT) psf.$(OBJEXT) psf_io.$(OBJEXT) sample.$(OBJEXT) \
-	vignet.$(OBJEXT) xml.$(OBJEXT)
+	utils.$(OBJEXT) vignet.$(OBJEXT) xml.$(OBJEXT)
 psfex_OBJECTS = $(am_psfex_OBJECTS)
 psfex_DEPENDENCIES = $(top_builddir)/src/fits/libfits.a \
 	$(top_builddir)/src/levmar/liblevmar.a \
@@ -255,7 +255,7 @@ SUBDIRS = fits levmar wcs
 psfex_SOURCES = check.c context.c $(CPLOTSOURCE) diagnostic.c fft.c \
 			  field.c field_utils.c fitswcs.c homo.c homoIo.c \
 			  main.c makeit.c makeitImpl.c misc.c \
-			  pca.c poly.c prefs.c psf.c psf_io.c sample.c vignet.c xml.c \
+			  pca.c poly.c prefs.c psf.c psf_io.c sample.c utils.c vignet.c xml.c \
 			  check.h context.h cplot.h define.h diagnostic.h \
 			  fft.h field.h fitswcs.h globals.h homo.h key.h \
 			  misc.h pca.h poly.h prefs.h preflist.h psf.h \

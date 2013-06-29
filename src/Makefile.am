@@ -36,7 +36,7 @@ bin_PROGRAMS		= psfex
 psfex_SOURCES		= check.c context.c $(CPLOTSOURCE) diagnostic.c fft.c \
 			  field.c field_utils.c fitswcs.c homo.c homoIo.c \
 			  main.c makeit.c makeitImpl.c misc.c \
-			  pca.c poly.c prefs.c psf.c psf_io.c sample.c vignet.c xml.c \
+			  pca.c poly.c prefs.c psf.c psf_io.c sample.c utils.c vignet.c xml.c \
 			  check.h context.h cplot.h define.h diagnostic.h \
 			  fft.h field.h fitswcs.h globals.h homo.h key.h \
 			  misc.h pca.h poly.h prefs.h preflist.h psf.h \
