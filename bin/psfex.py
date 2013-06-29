@@ -27,7 +27,7 @@ def splitFitsCard(line):
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def compute_fwhmrange(fwhm, maxvar, minin, maxin, plot=False):
+def compute_fwhmrange(fwhm, maxvar, minin, maxin, plot=dict(x=1)):
     """
 	PURPOSE Compute the FWHM range associated to a series of FWHM measurements.
 	INPUT   Pointer to an array of FWHMs,
@@ -74,12 +74,14 @@ def compute_fwhmrange(fwhm, maxvar, minin, maxin, plot=False):
         plt.axvline(fmin, color='red')
         [plt.axvline(_, color='blue') for _ in (minout, maxout)]
 
+        raw_input("Continue? ")
+
     return fmin, minout, maxout
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcval,
-                 plot=False):
+                 plot=dict(showFlags=True)):
     # N.b. ncat is function static!
 
     maxbad = prefs.getBadpixNmax()
@@ -91,6 +93,8 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
     if not set:
 	set = psfex.Set(context)
 	ncat = 1
+    else:
+        raise RuntimeError("Implement me")
 
     cmin, cmax = None, None
     if set.getNcontext():
@@ -209,32 +213,55 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
         plt.clf()
     bad = flags & prefs.getFlagMask()
     set.setBadFlags(int(sum(bad != 0)))
-    if plot and plt:
-        plt.plot(imag[bad], fluxrad[bad], 'o', alpha=0.2, color='red', label="flags %d" % sum(bad!=0))
+
+    if plt and plot:
+        if plot.get("showFlags"):
+            labels = {1   : "flux blended",
+                      2   : "blended",
+                      4   : "saturated",
+                      8   : "edge",
+                      16  : "bad aperture",
+                      32  : "bad isophotal",
+                      64  : "memory error (deblend)",
+                      128 : "memory error (extract)",
+                      }
+
+            alpha = 0.5
+            isSet = np.where(flags == 0x0)[0]
+            plt.plot(imag[isSet], fluxrad[isSet], 'o', alpha=alpha, label="good")
+
+            for i in range(7):
+                mask = 1 << i
+                if mask & prefs.getFlagMask():
+                    isSet = np.where(np.bitwise_and(flags, mask))[0]
+                    if isSet.any():
+                        plt.plot(imag[isSet], fluxrad[isSet], 'o', alpha=alpha, label=labels[mask])
+        else:
+            plt.plot(imag[bad], fluxrad[bad], 'o', alpha=0.2, label="flags %d" % sum(bad!=0))
 
     dbad = sn < minsn
     set.setBadSN(int(sum(dbad)))
     bad = np.logical_or(bad, dbad)
-    if plot and plt:
-        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=0.2, color='green', label="S/N %d" % sum(dbad))
+    if plt and plot and not plot.get("showFlags"):
+        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=0.2, label="S/N %d" % sum(dbad))
 
     dbad = fluxrad < frmin
     set.setBadFrmin(int(sum(dbad)))
     bad = np.logical_or(bad, dbad)
-    if plot and plt:
-        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=0.2, color='cyan', label="frmin %d" % sum(dbad))
+    if plt and plot and not plot.get("showFlags"):
+        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=0.2, label="frmin %d" % sum(dbad))
 
     dbad = fluxrad > frmax
     set.setBadFrmax(int(sum(dbad)))
     bad = np.logical_or(bad, dbad)
-    if plot and plt:
-        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=0.2, color='magenta', label="frmax %d" % sum(dbad))
+    if plt and plot and not plot.get("showFlags"):
+        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=0.2, label="frmax %d" % sum(dbad))
 
     dbad = elong > maxelong
     set.setBadElong(int(sum(dbad)))
     bad = np.logical_or(bad, dbad)
-    if plot and plt:
-        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=0.2, color='yellow', label="elong %d" % sum(dbad))
+    if plt and plot and not plot.get("showFlags"):
+        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=0.2, label="elong %d" % sum(dbad))
 
     #-- ... and check the integrity of the sample
     if maxbadflag:
@@ -242,19 +269,21 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
         dbad = nbad > maxbad
         set.setBadPix(int(sum(dbad)))
         bad = np.logical_or(bad, dbad)
-        if plot and plt:
-            plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=0.2, color='blue', label="badpix %d" % sum(dbad))
+        if plt and plot and not plot.get("showFlags"):
+            plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=0.2, label="badpix %d" % sum(dbad))
 
 
     good = np.logical_not(bad)
     if plot and plt:
-        plt.plot(imag[good], fluxrad[good], 'o', color="black")
+        plt.plot(imag[good], fluxrad[good], 'o', color="black", label="selected")
         [plt.axhline(_, color='red') for _ in [frmin, frmax]]
-        plt.xlim(-16, -1)
-        plt.ylim(-0.1, 4)
+        plt.xlim(np.median(imag[good]) + 5*np.array([-1, 1]))
+        plt.ylim(-0.1, 10)
         plt.legend(loc=2)
         plt.xlabel("Instrumental Magnitude")
         plt.ylabel("fluxrad")
+
+        raw_input("Continue? ")
     #
     # Create our sample of stars
     #
@@ -417,6 +446,9 @@ def load_samples(prefs, context, catindex=0, ext=psfex.Prefs.ALL_EXTENSIONS, nex
             for e in range(len(backnoises)):
 		set = read_samples(set, filenames[icat], fwhmmin[i]/2.0, fwhmmax[i]/2.0,
 				   e, next, icat, context, context.getPc(i) if context.getNpc() else None);
+
+                print "Skipping further HDUs"
+                break
 	else:
 	    set = read_samples(set, filenames[icat], fwhmmin[i]/2.0, fwhmmax[i]/2.0,
 			       ext, next, icat, context, context.getPc(i) if context.getNpc() else None)
