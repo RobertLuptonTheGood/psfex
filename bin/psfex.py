@@ -482,6 +482,59 @@ def load_samples(prefs, context, catindex=0, ext=psfex.Prefs.ALL_EXTENSIONS, nex
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+def showPsf(psf, frame=None):
+    """Show a PSF on ds9"""
+    naxis1 = None
+    for cat in prefs.getCatalogs():
+        if naxis1 is not None:
+            break
+        with pyfits.open(cat) as pf:
+            for hdu in pf:
+                if hdu.name == "LDAC_IMHEAD":
+                    hdr = hdu.data[0][0]    # the fits header from the original fits image
+                    md = dafBase.PropertySet()
+                    for line in hdr:
+                        try:
+                            md.set(*splitFitsCard(line))
+                        except AttributeError:
+                            continue
+                    naxis1, naxis2 = md.get("NAXIS1"), md.get("NAXIS2")
+                    break
+    
+    import lsst.afw.display.utils as ds9Utils
+    nx, ny = 13, 10
+    mos = ds9Utils.Mosaic(gutter=2, background=0.02)
+    for y in np.linspace(0, naxis1, ny):
+        for x in np.linspace(0, naxis2, nx):
+            psf.build(x, y)
+
+            im = afwImage.ImageF(*psf.getLoc().shape)
+            im.getArray()[:] = psf.getLoc()
+            im /= float(im.getArray().max())
+            
+            mos.append(im)
+
+    mosaic = mos.makeMosaic(mode=nx)
+    ds9.mtv(mosaic, frame=frame)
+
+    mos = ds9Utils.Mosaic(gutter=4, background=0.002)
+    for i in range(set.getNsample()):
+        s = set.getSample(i)
+    
+        smos = ds9Utils.Mosaic(gutter=2, background=-0.003)
+        for func in [s.getVig, s.getVigResi]:
+            arr = func()
+            arr /= s.getNorm()
+            im = afwImage.ImageF(*arr.shape)
+            im.getArray()[:] = arr
+            smos.append(im)
+
+        mos.append(smos.makeMosaic(mode="x"))
+        
+    mosaic = mos.makeMosaic(frame=frame+1)
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
 def makeit(prefs, set):
     # Create an array of PSFs (one PSF for each extension)
     if prefs.getVerboseType() != prefs.QUIET:
@@ -551,6 +604,8 @@ if __name__ == "__main__":
                         help="File containing default parameters", default="default.psfex")
     parser.add_argument('--overrides', type=str, nargs="+",
                         help="Overrides for default parameters", default=[])
+    parser.add_argument('--frame', type=int, 
+                        help="Show the PSF on ds9", default=None)
     parser.add_argument('--verbose', action="store_true", help="How chatty should I be?", default=False)
     
     argv = sys.argv[:]                  # argparse will mess with sys.argv
@@ -576,55 +631,6 @@ if __name__ == "__main__":
     set = load_samples(prefs, psfex.Context(prefs.getContextName(), [1, 1], [2], 1, True))
 
     psfs = makeit(prefs, set)
-    psf = psfs[0][0]
 
-    #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
-    naxis1 = None
-    for cat in prefs.getCatalogs():
-        if naxis1 is not None:
-            break
-        with pyfits.open(cat) as pf:
-            for hdu in pf:
-                if hdu.name == "LDAC_IMHEAD":
-                    hdr = hdu.data[0][0]    # the fits header from the original fits image
-                    md = dafBase.PropertySet()
-                    for line in hdr:
-                        try:
-                            md.set(*splitFitsCard(line))
-                        except AttributeError:
-                            continue
-                    naxis1, naxis2 = md.get("NAXIS1"), md.get("NAXIS2")
-                    break
-    
-    import lsst.afw.display.utils as ds9Utils
-    nx, ny = 13, 10
-    mos = ds9Utils.Mosaic(gutter=2, background=0.02)
-    for y in np.linspace(0, naxis1, ny):
-        for x in np.linspace(0, naxis2, nx):
-            psf.build(x, y)
-
-            im = afwImage.ImageF(*psf.getLoc().shape)
-            im.getArray()[:] = psf.getLoc()
-            im /= float(im.getArray().max())
-            
-            mos.append(im)
-
-    mosaic = mos.makeMosaic(mode=nx)
-    ds9.mtv(mosaic)
-
-    mos = ds9Utils.Mosaic(gutter=4, background=0.002)
-    for i in range(set.getNsample()):
-        s = set.getSample(i)
-    
-        smos = ds9Utils.Mosaic(gutter=2, background=-0.003)
-        for func in [s.getVig, s.getVigResi]:
-            arr = func()
-            arr /= s.getNorm()
-            im = afwImage.ImageF(*arr.shape)
-            im.getArray()[:] = arr
-            smos.append(im)
-
-        mos.append(smos.makeMosaic(mode="x"))
-        
-    mosaic = mos.makeMosaic(frame=1)
+    if args.frame is not None:
+        showPsf(psfs[0][0], frame=args.frame)
