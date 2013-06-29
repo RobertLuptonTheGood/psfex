@@ -495,8 +495,6 @@ VERSION 10/10/2010
  ***/
 void	poly_solve(double *a, double *b, int n)
   {
-   double	*vmat,*wmat;
-
 #ifdef HAVE_ATLAS
   clapack_dposv(CblasRowMajor, CblasUpper, n, 1, a, n, b, n);
 #else
