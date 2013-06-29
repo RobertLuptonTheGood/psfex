@@ -30,7 +30,8 @@ class Set;
  * \brief Store all we know about for a visit to a field (maybe including multiple chips)
  */
 class Field {
-    friend void makeit(std::vector<Field *> &fields, std::vector<Set *> const& sets);
+    friend void makeit(std::vector<boost::shared_ptr<Field> > &fields,
+                       std::vector<boost::shared_ptr<Set> > const& sets);
 public:
     Field(std::string const& ident="unknown" ///< Name of Field
          );
@@ -53,7 +54,8 @@ private:
    void _finalize(const bool force=false);
 };
 
-void makeit(std::vector<Field *> &fields, std::vector<Set *> const& sets);
+void makeit(std::vector<boost::shared_ptr<Field> > &fields,
+            std::vector<boost::shared_ptr<Set> > const& sets);
 
 }}
 

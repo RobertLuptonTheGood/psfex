@@ -110,9 +110,10 @@ extern "C" {
     void makeit_body(fieldstruct **fields, contextstruct **context, contextstruct **fullcontext, int);
 }
         
+
 void
-makeit(std::vector<Field *> &fields_,
-       std::vector<Set *> const& sets
+makeit(std::vector<boost::shared_ptr<Field> > &fields_,
+       std::vector<boost::shared_ptr<Set> > const& sets
       )
 {
     std::vector<fieldstruct *> fields(fields_.size());

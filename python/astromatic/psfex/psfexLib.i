@@ -34,6 +34,9 @@ static double PSFEX_SAVE_INTERPFAC = INTERPFAC;
 
 %include "ndarray.i"
 
+%shared_ptr(astromatic::psfex::Field);
+%shared_ptr(astromatic::psfex::Set);
+
 %import "lsst/daf/base/baseLib.i"
 %import "lsst/afw/image/Wcs.i"
 
@@ -57,9 +60,9 @@ static double PSFEX_SAVE_INTERPFAC = INTERPFAC;
 %include "prefs.hh"
 %include "psf.hh"
 
-%template(vectorField) std::vector<astromatic::psfex::Field *>;
+%template(vectorField) std::vector<boost::shared_ptr<astromatic::psfex::Field> >;
 %template(vectorPsf) std::vector<astromatic::psfex::Psf>;
-%template(vectorSet) std::vector<astromatic::psfex::Set *>;
+%template(vectorSet) std::vector<boost::shared_ptr<astromatic::psfex::Set> >;
 
 %inline %{
    #undef BIG

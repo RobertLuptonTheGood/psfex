@@ -85,7 +85,8 @@ private:
     
 class Set {
     friend class Psf;
-    friend void makeit(std::vector<Field *> &fields, std::vector<Set *> const& sets);
+    friend void makeit(std::vector<boost::shared_ptr<Field> > &fields,
+                       std::vector<boost::shared_ptr<Set> > const& sets);
 public:
     Set(Context &c);
     ~Set();
