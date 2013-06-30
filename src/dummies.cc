@@ -65,9 +65,9 @@ Field::addExt(lsst::afw::image::Wcs const& wcs_,
               int const naxis1, int const naxis2,
               int const nobj)
 {
-    QREALLOC(impl->psf, psfstruct *, impl->next);
+    QREALLOC(impl->psf, psfstruct *, impl->next + 1);
     impl->psf[impl->next] = 0;
-    QREALLOC(impl->wcs, wcsstruct *, impl->next);
+    QREALLOC(impl->wcs, wcsstruct *, impl->next + 1);
     impl->wcs[impl->next] = 0;
     /*
      * We're going to fake psfex's wcsstruct object.  We only need enough of it for field_locate
