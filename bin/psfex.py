@@ -463,8 +463,18 @@ def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1, plot=di
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def showPsf(psf, set, wcs=None, naxis1=None, naxis2=None, trim=0, frame=None, title=None):
+def showPsf(psf, set, ext=None, wcsData=None, trim=0, frame=None, title=None):
     """Show a PSF on ds9"""
+
+    if ext is not None:
+        psf = psf[ext]
+
+    if wcsData:
+        if ext is not None:
+            wcsData = wcsData[ext]
+        wcs, naxis1, naxis2 = wcsData
+    else:
+        wcs, naxis1, naxis2 = None, None, None
 
     naxis = [naxis1, naxis2]
     for i in range(2):
@@ -516,6 +526,9 @@ def showPsf(psf, set, wcs=None, naxis1=None, naxis2=None, trim=0, frame=None, ti
         CD.append(delta/(pos[1][0][i] - pos[0][0][i]))
     mosWcs = afwImage.makeWcs(pos[0][1], pos[0][0], CD[0], 0, 0, CD[1])
 
+    if ext is not None:
+        title = "%s-%d" % (title, ext)
+
     ds9.mtv(mosaic, frame=frame, title=title, wcs=mosWcs)
 
     mosaic.writeFits("%s-mod.fits" % title, mosWcs.getFitsMetadata())
@@ -525,6 +538,8 @@ def showPsf(psf, set, wcs=None, naxis1=None, naxis2=None, trim=0, frame=None, ti
     mos = ds9Utils.Mosaic(gutter=4, background=0.002)
     for i in range(set.getNsample()):
         s = set.getSample(i)
+        if ext is not None and s.getExtindex() != ext:
+            continue
     
         smos = ds9Utils.Mosaic(gutter=2, background=-0.003)
         for func in [s.getVig, s.getVigResi]:
@@ -546,11 +561,13 @@ def makeit(prefs, context, saveWcs=False, plot=dict()):
         print "----- %d input catalogues:" % prefs.getNcat()
 
     if saveWcs:                         # only needed for making plots
-        wcss = []
+        wcssList = []
 
     fields = psfex.vectorField()    
     for cat in prefs.getCatalogs():
         field = psfex.Field(cat)
+        wcss = []
+        wcssList.append(wcss)
         with pyfits.open(cat) as pf:
             for hdu in pf:
                 if hdu.name == "PRIMARY":
@@ -599,7 +616,7 @@ def makeit(prefs, context, saveWcs=False, plot=dict()):
 
     ret = [[f.getPsfs() for f in fields], sets]
     if saveWcs:
-        ret.append(wcss)
+        ret.append(wcssList)
 
     return ret
 
@@ -655,7 +672,10 @@ if __name__ == "__main__":
     psfs, sets, wcss = makeit(prefs, context, saveWcs=True, plot=plot)
 
     if args.ds9 is not None:
+        ds9Frame = args.ds9
+        import pdb; pdb.set_trace() 
         for i in range(len(sets)):
-            ext = 0
-            showPsf(psfs[i][ext], sets[i], *wcss[i], trim=5, frame=args.ds9 + i*len(sets),
-                    title=os.path.splitext(os.path.split(prefs.getCatalogs()[i])[1])[0])
+            for ext in range(len(psfs[i])):
+                showPsf(psfs[i], sets[i], ext, wcss[i], trim=5, frame=ds9Frame,
+                        title=os.path.splitext(os.path.split(prefs.getCatalogs()[i])[1])[0])
+                ds9Frame += 2
