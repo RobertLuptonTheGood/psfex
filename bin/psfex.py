@@ -202,7 +202,7 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
 
     # Now examine each vector of the shipment
     sn = flux/np.where(fluxerr > 0, fluxerr, 1)
-    sn[fluxerr < 0] = psfex.cvar.BIG
+    sn[fluxerr <= 0] = psfex.cvar.BIG
     #---- Apply some selection over flags, fluxes...
     if plot and plt:
         imag = -2.5*np.log10(flux)
