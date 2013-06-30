@@ -187,10 +187,10 @@ void	check_write(fieldstruct *field, setstruct *set, char *checkname,
         QCALLOC(pix0, float, tab->tabsize);
         tab->bodybuf = (char *)pix0; 
         pix = pix0;
-        sample = set->sample;
         for (n=0; n<set->nsample; n++)
           {
-          fpix = (sample++)->vigchi;
+	  sample = set->sample[n];
+          fpix = sample->vigchi;
           for (i=npix; i--;)
             *(pix++) = *(fpix++);
           }
@@ -208,11 +208,11 @@ void	check_write(fieldstruct *field, setstruct *set, char *checkname,
         tab->tabsize = tab->bytepix*tab->naxisn[0]*tab->naxisn[1];
         QCALLOC(pix0, float, tab->tabsize);
         tab->bodybuf = (char *)pix0; 
-        sample = set->sample;
         for (n=0; n<set->nsample; n++)
           {
+	  sample = set->sample[n];
           pix = pix0 + ((n%nw) + (n/nw)*nw*h)*w;
-          fpix = (sample++)->vigchi;
+          fpix = sample->vigchi;
           for (y=h; y--; pix += step)
             for (x=w; x--;)
               *(pix++) = *(fpix++);
@@ -282,10 +282,10 @@ void	check_write(fieldstruct *field, setstruct *set, char *checkname,
         QCALLOC(pix0, float, tab->tabsize);
         tab->bodybuf = (char *)pix0; 
         pix = pix0;
-        sample = set->sample;
         for (n=0; n<set->nsample; n++)
           {
-          fpix = (sample++)->vigresi;
+	  sample = set->sample[n];
+          fpix = sample->vigresi;
           for (i=npix; i--;)
             *(pix++) = *(fpix++);
           }
@@ -303,11 +303,11 @@ void	check_write(fieldstruct *field, setstruct *set, char *checkname,
         tab->tabsize = tab->bytepix*tab->naxisn[0]*tab->naxisn[1];
         QCALLOC(pix0, float, tab->tabsize);
         tab->bodybuf = (char *)pix0; 
-        sample = set->sample;
         for (n=0; n<set->nsample; n++)
           {
+	  sample = set->sample[n];
           pix = pix0 + ((n%nw) + (n/nw)*nw*h)*w;
-          fpix = (sample++)->vigresi;
+          fpix = sample->vigresi;
           for (y=h; y--; pix += step)
             for (x=w; x--;)
               *(pix++) = *(fpix++);
@@ -329,10 +329,10 @@ void	check_write(fieldstruct *field, setstruct *set, char *checkname,
         QCALLOC(pix0, float, tab->tabsize);
         tab->bodybuf = (char *)pix0; 
         pix = pix0;
-        sample = set->sample;
         for (n=0; n<set->nsample; n++)
           {
-          fpix = (sample++)->vig;
+	  sample = set->sample[n];
+          fpix = sample->vig;
           for (i=npix; i--;)
             *(pix++) = *(fpix++);
           }
@@ -350,11 +350,11 @@ void	check_write(fieldstruct *field, setstruct *set, char *checkname,
         tab->tabsize = tab->bytepix*tab->naxisn[0]*tab->naxisn[1];
         QCALLOC(pix0, float, tab->tabsize);
         tab->bodybuf = (char *)pix0; 
-        sample = set->sample;
         for (n=0; n<set->nsample; n++)
           {
+	  sample = set->sample[n];
           pix = pix0 + ((n%nw) + (n/nw)*nw*h)*w;
-          fpix = (sample++)->vig;
+          fpix = sample->vig;
           for (y=h; y--; pix += step)
             for (x=w; x--;)
               *(pix++) = *(fpix++);
@@ -376,10 +376,10 @@ void	check_write(fieldstruct *field, setstruct *set, char *checkname,
         QCALLOC(pix0, float, tab->tabsize);
         tab->bodybuf = (char *)pix0; 
         pix = pix0;
-        sample = set->sample;
         for (n=0; n<set->nsample; n++)
           {
-          fpix = (sample++)->vigweight;
+	  sample = set->sample[n];
+          fpix = sample->vigweight;
           for (i=npix; i--;)
             *(pix++) = *(fpix++);
           }
@@ -397,11 +397,11 @@ void	check_write(fieldstruct *field, setstruct *set, char *checkname,
         tab->tabsize = tab->bytepix*tab->naxisn[0]*tab->naxisn[1];
         QCALLOC(pix0, float, tab->tabsize);
         tab->bodybuf = (char *)pix0; 
-        sample = set->sample;
         for (n=0; n<set->nsample; n++)
           {
+	  sample = set->sample[n];
           pix = pix0 + ((n%nw) + (n/nw)*nw*h)*w;
-          fpix = (sample++)->vigweight;
+          fpix = sample->vigweight;
           for (y=h; y--; pix += step)
             for (x=w; x--;)
               *(pix++) = *(fpix++);

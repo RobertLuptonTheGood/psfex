@@ -137,7 +137,7 @@ public:
             throw std::out_of_range(s1.str());
         }
 
-        return Sample(&impl->sample[i], impl->vigsize);
+        return Sample(impl->sample[i], impl->vigsize);
     }
 
 private:

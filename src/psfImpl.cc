@@ -89,7 +89,7 @@ Set::newSample()
             realloc_samples(impl, (int)(1.62*impl->nsamplemax + 1));
         }
     }
-    return Sample(&impl->sample[impl->nsample++], impl->vigsize);
+    return Sample(impl->sample[impl->nsample++], impl->vigsize);
 }
         
 void

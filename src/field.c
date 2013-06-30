@@ -125,10 +125,10 @@ void	field_count(fieldstruct **fields, setstruct *set, int counttype)
    samplestruct	*sample;
    int		c,e,n,s, w,h, x,y, size;
 
-  sample = set->sample;
   size = (double)prefs.context_nsnap;
-  for (s=set->nsample; s--; sample++)
+  for (s=0; s<set->nsample; ++s)
     {
+    sample = set->sample[s];
     c = sample->catindex;
     e = sample->extindex;
     field = fields[c];
@@ -263,10 +263,10 @@ void	field_stats(fieldstruct **fields, setstruct *set)
    samplestruct	*sample;
    int		c,e,n,s, w,h, x,y, size;
 
-  sample = set->sample;
   size = (double)prefs.context_nsnap;
-  for (s=set->nsample; s--; sample++)
+  for (s=0; s<set->nsample; ++s)
     {
+    sample = set->sample[s];
     c = sample->catindex;
     e = sample->extindex;
     field = fields[c];

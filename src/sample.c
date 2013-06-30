@@ -577,7 +577,7 @@ setstruct *read_samples(setstruct *set, char *filename,
   vigw = *(vigkey->naxisn);
   vigh = *(vigkey->naxisn+1);
   vigsize = vigw*vigh;
-  if (!set->sample)
+  if (!set->nsample)
     {
     set->vigsize[0] = vigw;
     set->vigsize[1] = vigh;
@@ -675,7 +675,7 @@ setstruct *read_samples(setstruct *set, char *filename,
       }
     
 /*-- Allocate memory for the first shipment */
-    if (!set->sample)
+    if (!set->nsample)
       {
       nsample = 0;
       nsamplemax = LSAMPLE_DEFSIZE;
@@ -696,7 +696,7 @@ setstruct *read_samples(setstruct *set, char *filename,
       realloc_samples(set, nsamplemax);
       }
 
-    sample = set->sample + nsample;
+    sample = set->sample[nsample];
     sample->catindex = catindex;
     sample->extindex = ext;
 
@@ -737,7 +737,8 @@ setstruct *read_samples(setstruct *set, char *filename,
       }
     make_weights(set, prefs.prof_accuracy, sample);
     recenter_sample(sample, set, *fluxrad);
-    nsample++;
+
+    nsample = ++set->nsample;
     }
 
 /* Update the scaling */
@@ -754,8 +755,6 @@ setstruct *read_samples(setstruct *set, char *filename,
     }
   end_readobj(keytab,tab, buf);
   free_cat(&cat, 1); 
-
-  set->nsample = nsample;
 
 /* Don't waste memory! */
   if (nsample)
