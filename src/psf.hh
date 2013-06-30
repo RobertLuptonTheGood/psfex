@@ -55,7 +55,9 @@ class Sample {
 public:
     ~Sample() { }
 
+    int getCatindex() const { return impl->catindex; }
     void setCatindex(int val) { impl->catindex = val; }
+    int getExtindex() const { return impl->extindex; }
     void setExtindex(int val) { impl->extindex = val; }
     void setVig(ndarray::Array<float,2,2> const& img);
     void setNorm(float val) { impl->norm = val; }
