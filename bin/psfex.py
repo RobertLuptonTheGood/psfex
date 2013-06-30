@@ -83,11 +83,6 @@ def compute_fwhmrange(fwhm, maxvar, minin, maxin, plot=dict(fwhmHistogram=False)
 
 def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcval,
                  plot=dict(showFlags=False, showRejection=False)):
-    maxbad = prefs.getBadpixNmax()
-    maxbadflag = prefs.getBadpixFlag()
-    maxelong = (prefs.getMaxellip() + 1.0)/(1.0 - prefs.getMaxellip()) if prefs.getMaxellip() < 1.0 else 100.0
-    minsn = prefs.getMinsn()
-
     # allocate a new set iff set is None
     if not set:
 	set = psfex.Set(context)
@@ -199,6 +194,59 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
                         set.setContextname(i, key)
 
     # Now examine each vector of the shipment
+    good = select_candidates(set, prefs, frmin, frmax, 
+                             flags, flux, fluxerr, fluxrad, elong, vignet,
+                             plot=plot, title="%s[%d]" % (filename, ext + 1))
+    #
+    # Insert the good candidates into the set
+    #
+    if not vignet.dtype.isnative:
+        # without the swap setVig fails with "ValueError: 'unaligned arrays cannot be converted to C++'"
+        vignet = vignet.byteswap() 
+
+    for i in np.where(good)[0]:
+        sample = set.newSample()
+        sample.setCatindex(catindex)
+        sample.setExtindex(ext)
+
+        sample.setVig(vignet[i])
+
+        sample.setNorm(float(flux[i]))
+        sample.setBacknoise2(backnoise2)
+        sample.setGain(gain)
+        sample.setX(float(xm[i]))
+        sample.setY(float(ym[i]))
+        sample.setFluxrad(float(fluxrad[i]))
+
+        for j in range(set.getNcontext()):
+            sample.setContext(j, float(contextvalp[j][i]))
+
+        set.finiSample(sample, prefs.getProfAccuracy())
+
+    #---- Update min and max
+    for j in range(set.getNcontext()):
+        cmin[j] = contextvalp[j][good].min()
+        cmax[j] = contextvalp[j][good].max()
+
+    # Update the scaling
+    if set.getNsample():
+        for i in range(set.getNcontext()):
+            set.setContextScale(i, cmax[i] - cmin[i])
+            set.setContextOffset(i, (cmin[i] + cmax[i])/2.0)
+
+    # Don't waste memory!
+    set.trimMemory()
+
+    return set
+
+def select_candidates(set, prefs, frmin, frmax, 
+                      flags, flux, fluxerr, fluxrad, elong, vignet,
+                      plot=dict(), title=""):
+    maxbad = prefs.getBadpixNmax()
+    maxbadflag = prefs.getBadpixFlag()
+    maxelong = (prefs.getMaxellip() + 1.0)/(1.0 - prefs.getMaxellip()) if prefs.getMaxellip() < 1.0 else 100.0
+    minsn = prefs.getMinsn()
+
     sn = flux/np.where(fluxerr > 0, fluxerr, 1)
     sn[fluxerr <= 0] = -psfex.cvar.BIG
     #---- Apply some selection over flags, fluxes...
@@ -278,50 +326,11 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
         plt.legend(loc=2)
         plt.xlabel("Instrumental Magnitude")
         plt.ylabel("fluxrad")
-        plt.title("%s[%d] %d selected" % (filename, ext + 1, sum(good)))
+        plt.title("%s %d selected" % (title, sum(good)))
 
         raw_input("Continue? ")
-    #
-    # Insert our sample of stars into the set
-    #
-    if not vignet.dtype.isnative:
-        # without the swap setVig fails with "ValueError: 'unaligned arrays cannot be converted to C++'"
-        vignet = vignet.byteswap() 
 
-    for i in np.where(good)[0]:
-        sample = set.newSample()
-        sample.setCatindex(catindex)
-        sample.setExtindex(ext)
-
-        sample.setVig(vignet[i])
-
-        sample.setNorm(float(flux[i]))
-        sample.setBacknoise2(backnoise2)
-        sample.setGain(gain)
-        sample.setX(float(xm[i]))
-        sample.setY(float(ym[i]))
-        sample.setFluxrad(float(fluxrad[i]))
-
-        for j in range(set.getNcontext()):
-            sample.setContext(j, float(contextvalp[j][i]))
-
-        set.finiSample(sample, prefs.getProfAccuracy())
-
-    #---- Update min and max
-    for j in range(set.getNcontext()):
-        cmin[j] = contextvalp[j][good].min()
-        cmax[j] = contextvalp[j][good].max()
-
-    # Update the scaling
-    if set.getNsample():
-        for i in range(set.getNcontext()):
-            set.setContextScale(i, cmax[i] - cmin[i])
-            set.setContextOffset(i, (cmin[i] + cmax[i])/2.0)
-
-    # Don't waste memory!
-    set.trimMemory()
-
-    return set
+    return good
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -673,7 +682,6 @@ if __name__ == "__main__":
 
     if args.ds9 is not None:
         ds9Frame = args.ds9
-        import pdb; pdb.set_trace() 
         for i in range(len(sets)):
             for ext in range(len(psfs[i])):
                 showPsf(psfs[i], sets[i], ext, wcss[i], trim=5, frame=ds9Frame,
