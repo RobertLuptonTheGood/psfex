@@ -28,7 +28,7 @@ def splitFitsCard(line):
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def compute_fwhmrange(fwhm, maxvar, minin, maxin, plot=dict()):
+def compute_fwhmrange(fwhm, maxvar, minin, maxin, plot=dict(fwhmHistogram=False)):
     """
 	PURPOSE Compute the FWHM range associated to a series of FWHM measurements.
 	INPUT   Pointer to an array of FWHMs,
@@ -68,7 +68,7 @@ def compute_fwhmrange(fwhm, maxvar, minin, maxin, plot=dict()):
     if maxout > maxin:
 	maxout = maxin
 
-    if plot and plt:
+    if plt and plot.get("fwhmHistogram"):
         plt.clf()
         plt.hist(fwhm, nfwhm//10 + 1, normed=1, facecolor='g', alpha=0.75)
         plt.xlabel("FWHM")
@@ -82,9 +82,7 @@ def compute_fwhmrange(fwhm, maxvar, minin, maxin, plot=dict()):
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcval,
-                 plot=dict()):
-    """N.b. plot=dict(showFlags=True)"""
-
+                 plot=dict(showFlags=False, showRejection=False)):
     maxbad = prefs.getBadpixNmax()
     maxbadflag = prefs.getBadpixFlag()
     maxelong = (prefs.getMaxellip() + 1.0)/(1.0 - prefs.getMaxellip()) if prefs.getMaxellip() < 1.0 else 100.0
@@ -204,13 +202,16 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
     sn = flux/np.where(fluxerr > 0, fluxerr, 1)
     sn[fluxerr <= 0] = -psfex.cvar.BIG
     #---- Apply some selection over flags, fluxes...
-    if plot and plt:
+    # Can we plot, and is at least one plot request live?
+    doPlot = plt and sum([v for k, v in plot.items() if k in ["showFlags", "showRejection"]])
+    if doPlot:
         imag = -2.5*np.log10(flux)
         plt.clf()
     bad = flags & prefs.getFlagMask()
     set.setBadFlags(int(sum(bad != 0)))
 
-    if plt and plot:
+    if doPlot:
+        alpha = 0.5
         if plot.get("showFlags"):
             labels = {1   : "flux blended",
                       2   : "blended",
@@ -222,7 +223,6 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
                       128 : "memory error (extract)",
                       }
 
-            alpha = 0.5
             isSet = np.where(flags == 0x0)[0]
             plt.plot(imag[isSet], fluxrad[isSet], 'o', alpha=alpha, label="good")
 
@@ -232,32 +232,32 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
                     isSet = np.where(np.bitwise_and(flags, mask))[0]
                     if isSet.any():
                         plt.plot(imag[isSet], fluxrad[isSet], 'o', alpha=alpha, label=labels[mask])
-        else:
-            plt.plot(imag[bad], fluxrad[bad], 'o', alpha=0.2, label="flags %d" % sum(bad!=0))
+        elif plot.get("showRejection"):
+            plt.plot(imag[bad], fluxrad[bad], 'o', alpha=alpha, label="flags %d" % sum(bad!=0))
 
     dbad = sn < minsn
     set.setBadSN(int(sum(dbad)))
     bad = np.logical_or(bad, dbad)
-    if plt and plot and not plot.get("showFlags"):
-        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=0.2, label="S/N %d" % sum(dbad))
+    if plot.get("showRejection"):
+        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=alpha, label="S/N %d" % sum(dbad))
 
     dbad = fluxrad < frmin
     set.setBadFrmin(int(sum(dbad)))
     bad = np.logical_or(bad, dbad)
-    if plt and plot and not plot.get("showFlags"):
-        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=0.2, label="frmin %d" % sum(dbad))
+    if plot.get("showRejection"):
+        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=alpha, label="frmin %d" % sum(dbad))
 
     dbad = fluxrad > frmax
     set.setBadFrmax(int(sum(dbad)))
     bad = np.logical_or(bad, dbad)
-    if plt and plot and not plot.get("showFlags"):
-        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=0.2, label="frmax %d" % sum(dbad))
+    if plot.get("showRejection"):
+        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=alpha, label="frmax %d" % sum(dbad))
 
     dbad = elong > maxelong
     set.setBadElong(int(sum(dbad)))
     bad = np.logical_or(bad, dbad)
-    if plt and plot and not plot.get("showFlags"):
-        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=0.2, label="elong %d" % sum(dbad))
+    if plot.get("showRejection"):
+        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=alpha, label="elong %d" % sum(dbad))
 
     #-- ... and check the integrity of the sample
     if maxbadflag:
@@ -265,12 +265,12 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
         dbad = nbad > maxbad
         set.setBadPix(int(sum(dbad)))
         bad = np.logical_or(bad, dbad)
-        if plt and plot and not plot.get("showFlags"):
-            plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=0.2, label="badpix %d" % sum(dbad))
+        if plot.get("showRejection"):
+            plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=alpha, label="badpix %d" % sum(dbad))
 
 
     good = np.logical_not(bad)
-    if plot and plt:
+    if doPlot:
         plt.plot(imag[good], fluxrad[good], 'o', color="black", label="selected")
         [plt.axhline(_, color='red') for _ in [frmin, frmax]]
         plt.xlim(np.median(imag[good]) + 5*np.array([-1, 1]))
@@ -278,6 +278,7 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
         plt.legend(loc=2)
         plt.xlabel("Instrumental Magnitude")
         plt.ylabel("fluxrad")
+        plt.title("%s[%d] %d selected" % (filename, ext + 1, sum(good)))
 
         raw_input("Continue? ")
     #
@@ -324,7 +325,7 @@ def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcva
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1):
+def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1, plot=dict()):
     minsn = prefs.getMinsn()
     maxelong = (prefs.getMaxellip() + 1.0)/(1.0 - prefs.getMaxellip()) if prefs.getMaxellip() < 1.0 else 100
     min = prefs.getFwhmrange()[0]
@@ -406,7 +407,8 @@ def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1):
                     fwhms_all[i:len(l)] = l
                     i += len(l)
 		mode, min, max = compute_fwhmrange(fwhms_all, prefs.getMaxvar(),
-                                                   prefs.getFwhmrange()[0], prefs.getFwhmrange()[1])
+                                                   prefs.getFwhmrange()[0], prefs.getFwhmrange()[1],
+                                                   plot=plot)
 	    else:
 		print >> sys.stderr, "No source with appropriate FWHM found!!"
 		mode = min = max = 2.35/(1.0 - 1.0/psfex.cvar.INTERPFAC)
@@ -424,7 +426,7 @@ def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1):
 		if (nobj):
                     fwhmmode[i], fwhmmin[i], fwhmmax[i] = \
                         compute_fwhmrange(fwhms[i], prefs.getMaxvar(),
-                                          prefs.getFwhmrange()[0], prefs.getFwhmrange()[1])
+                                          prefs.getFwhmrange()[0], prefs.getFwhmrange()[1], plot=plot)
 		else:
 		    print >> sys.stderr, "No source with appropriate FWHM found!!"
 		    fwhmmode[i] = fwhmmin[i] = fwhmmax[i] = 2.35/(1.0 - 1.0/psfex.cvar.INTERPFAC)
@@ -442,7 +444,7 @@ def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1):
 
         for e in extensions:
             set = read_samples(set, fileName, fwhmmin[i]/2.0, fwhmmax[i]/2.0,
-                               e, next, i, context, context.getPc(i) if context.getNpc() else None);
+                               e, next, i, context, context.getPc(i) if context.getNpc() else None, plot=plot);
 
 	if fwhmmode[i] < mode:
 	    mode = fwhmmode[i]
@@ -538,7 +540,7 @@ def showPsf(psf, set, wcs=None, naxis1=None, naxis2=None, trim=0, frame=None, ti
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def makeit(prefs, context, saveWcs=False):
+def makeit(prefs, context, saveWcs=False, plot=dict()):
     # Create an array of PSFs (one PSF for each extension)
     if prefs.getVerboseType() != prefs.QUIET:
         print "----- %d input catalogues:" % prefs.getNcat()
@@ -589,17 +591,9 @@ def makeit(prefs, context, saveWcs=False):
         psfbasis = None
         psfbasiss = None
 
-    sets = []
-    for set in load_samples(prefs, context):
+    sets = psfex.vectorSet()
+    for set in load_samples(prefs, context, plot=plot):
         sets.append(set)
-
-    if True:                            # swig should be able to handle [Field], but it can't.
-                                        # this is a problem in my bindings and/or a swig bug
-
-        _sets = sets                    # and [Set] too
-        sets = psfex.vectorSet()
-        for s in _sets:
-            sets.push_back(s)
 
     psfex.makeit(fields, sets)
 
@@ -617,6 +611,8 @@ if __name__ == "__main__":
                         help="File containing default parameters", default="default.psfex")
     parser.add_argument('--overrides', type=str, nargs="+",
                         help="Overrides for default parameters", default=[])
+    parser.add_argument('--plot', type=str, nargs="+",
+                        help="Desired plots", default=[])
     parser.add_argument('--ds9', type=int, 
                         help="Show the PSF on ds9", default=None)
     parser.add_argument('--verbose', action="store_true", help="How chatty should I be?", default=False)
@@ -645,7 +641,18 @@ if __name__ == "__main__":
                             prefs.getGroupDeg(),
                             psfex.Context.REMOVEHIDDEN if False else psfex.Context.KEEPHIDDEN)
 
-    psfs, sets, wcss = makeit(prefs, context, saveWcs=True)
+    plotKeys = ["fwhmHistogram", "showFlags", "showRejection"]
+    if "help" in args.plot:
+        print "Valid plot types are %s" % " ".join(plotKeys)
+        sys.exit(0)
+    plot = {}
+    for k in args.plot:
+        if k not in plotKeys:
+            print >> sys.stderr, "Unknown plot type %s (Valid types are %s)" % (k, " ".join(plotKeys))
+            sys.exit(1)
+        plot[k] = True
+
+    psfs, sets, wcss = makeit(prefs, context, saveWcs=True, plot=plot)
 
     if args.ds9 is not None:
         for i in range(len(sets)):
