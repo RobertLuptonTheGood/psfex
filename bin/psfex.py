@@ -332,20 +332,22 @@ def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1):
 
     filenames = prefs.getCatalogs()
 
-    catindexes = range(len(filenames))  # Do we need this variable?
-
-    ncat = len(catindexes)
+    ncat = len(filenames)
     fwhmmin = np.empty(ncat)
     fwhmmax = np.empty(ncat)
     fwhmode = np.empty(ncat)
     
-    if prefs.getAutoselectFlag():
+    if not prefs.getAutoselectFlag():
+        fwhmmin = np.zeros(ncat) + prefs.getFwhmrange()[0]
+        fwhmmax = np.zeros(ncat) + prefs.getFwhmrange()[1]
+        fwhmmode = (fwhmmin + fwhmmax)/2.0
+    else:
         fwhms = {}
   
         #-- Try to estimate the most appropriate Half-light Radius range
         #-- Get the Half-light radii
 	nobj = 0
-        for i, icat in enumerate(catindexes):
+        for i, fileName in enumerate(filenames):
             fwhms[i] = []
                 
             if prefs.getVerboseType() != prefs.QUIET:
@@ -353,7 +355,7 @@ def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1):
 
             #---- Read input catalog
 	    backnoises = []
-            with pyfits.open(filenames[icat]) as cat:
+            with pyfits.open(fileName) as cat:
                 extCtr = -1
                 for tab in cat:
                     if tab.name == "LDAC_IMHEAD":
@@ -426,16 +428,12 @@ def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1):
 		else:
 		    print >> sys.stderr, "No source with appropriate FWHM found!!"
 		    fwhmmode[i] = fwhmmin[i] = fwhmmax[i] = 2.35/(1.0 - 1.0/psfex.cvar.INTERPFAC)
-    else:
-        fwhmmin = np.zeros(ncat) + prefs.getFwhmrange()[0]
-        fwhmmax = np.zeros(ncat) + prefs.getFwhmrange()[1]
-        fwhmmode = (fwhmmin + fwhmmax)/2.0
 
     # Read the samples
     mode = psfex.cvar.BIG               # mode of FWHM distribution
 
     sets = []
-    for i, icat in enumerate(catindexes):
+    for i, fileName in enumerate(filenames):
         set = None
 	if ext == prefs.ALL_EXTENSIONS:
             extensions = range(len(backnoises))
@@ -443,10 +441,8 @@ def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1):
             extensions = [ext]
 
         for e in extensions:
-            set = read_samples(set, filenames[icat], fwhmmin[i]/2.0, fwhmmax[i]/2.0,
-                               e, next, icat, context, context.getPc(i) if context.getNpc() else None);
-
-        sets.append(set)
+            set = read_samples(set, fileName, fwhmmin[i]/2.0, fwhmmax[i]/2.0,
+                               e, next, i, context, context.getPc(i) if context.getNpc() else None);
 
 	if fwhmmode[i] < mode:
 	    mode = fwhmmode[i]
@@ -454,24 +450,12 @@ def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1):
         set.setFwhm(mode)
 
         if prefs.getVerboseType() != prefs.QUIET:
-            print "%d samples loaded." % set.getNsample()
+            if set.getNsample():
+                print "%d samples loaded." % set.getNsample()
+            else:
+                raise RuntimeError("No appropriate source found!!")
 
-        if not set.getNsample():
-            print >> sys.stderr, "No appropriate source found!!"
-
-        if False:
-            if (set.badflags):
-                print "%d detections discarded with bad SExtractor flags" % set.badflags
-                if set.badsn:
-                    print "%d detections discarded with S/N too low" % set.badsn
-            if set.badfrmin:
-                print "%d detections discarded with FWHM too small" % set.badfrmin
-            if set.badfrmax:
-                print "%d detections discarded with FWHM too large" % set.badfrmax
-            if set.badelong:
-                print "%d detections discarded with elongation too high" % set.badelong
-            if set.badpix:
-                print "%d detections discarded with too many bad pixels\n\n" % set.badpix
+        sets.append(set)
 
     return sets
 
@@ -587,9 +571,11 @@ def makeit(prefs, context, saveWcs=False):
                 elif hdu.name == "LDAC_OBJECTS":
                     nobj = len(hdu.data)
 
-            field.addExt(wcs, naxis1, naxis2, nobj)
-            if saveWcs:
-                wcss.append((wcs, naxis1, naxis2))
+                    assert wcs, "LDAC_OBJECTS comes after LDAC_IMHEAD"
+                    field.addExt(wcs, naxis1, naxis2, nobj)
+                    if saveWcs:
+                        wcss.append((wcs, naxis1, naxis2))
+                    wcs = None
 
         field.finalize()
         fields.append(field)
