@@ -632,7 +632,7 @@ setstruct *read_samples(setstruct *set, char *filename,
 	ncat, str2, n,nsample);
 //      NFPRINTF(OUTPUT, str);
       }
-    sn = (double)(*fluxerr>0.0? *flux / *fluxerr : BIG);
+    sn = (double)(*fluxerr>0.0? *flux / *fluxerr : -BIG);
 /*---- Apply some selection over flags, fluxes... */
     contflag = 0;
     if (*flags&prefs.flag_mask)
