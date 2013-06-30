@@ -31,6 +31,7 @@
 #include	"config.h"
 #endif
 
+#include	<assert.h>
 #include	<ctype.h>
 #include	<math.h>
 #include	<stdio.h>
@@ -290,8 +291,12 @@ void	malloc_samples(setstruct *set, int nsample)
    samplestruct	*sample;
    int		n;
 
-  QMALLOC(set->s_sample, samplestruct, nsample);
   QMALLOC(set->sample, samplestruct *, nsample);
+  set->nsamplemax = nsample;
+  if (set != set->samples_owner)
+     return;
+  
+  QMALLOC(set->s_sample, samplestruct, nsample);
   for (n=0; n!=nsample; ++n)
     {
     sample = set->sample[n] = &set->s_sample[n];
@@ -302,8 +307,6 @@ void	malloc_samples(setstruct *set, int nsample)
     if (set->ncontext)
       QMALLOC(sample->context, double, set->ncontext);
     }
-
-  set->nsamplemax = nsample;
 
   return;
   }
@@ -323,6 +326,12 @@ void	realloc_samples(setstruct *set, int nsample)
   {
    samplestruct	*sample;
    int		n;
+
+  if (set != set->samples_owner)
+  {
+     assert(nsample <= set->nsamplemax);
+     return;
+  }
 
 /* If we want to reallocate 0 samples, better free the whole thing! */
   if (!nsample)
