@@ -7,6 +7,8 @@ try:
     import matplotlib.pyplot as plt
 except ImportError:
     plt = None
+import lsst.afw.coord as afwCoord
+import lsst.afw.geom as afwGeom
 import lsst.afw.table as afwTable
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -240,6 +242,19 @@ def read_samples(prefs, set, filename, frmin, frmax, ext, next, catindex, contex
 
     return set
 
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def getSexFlags(*args):
+    return {1   : "flux blended",
+            2   : "blended",
+            4   : "saturated",
+            8   : "edge",
+            16  : "bad aperture",
+            32  : "bad isophotal",
+            64  : "memory error (deblend)",
+            128 : "memory error (extract)",
+            }
+
 def select_candidates(set, prefs, frmin, frmax, 
                       flags, flux, fluxerr, fluxrad, elong, vignet,
                       plot=dict(), title=""):
@@ -324,6 +339,14 @@ def select_candidates(set, prefs, frmin, frmax,
         raw_input("Continue? ")
 
     return good
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def getFlags():
+    if args.lsst:
+        return getLsstFlags(None)
+    else:
+        return getSexFlags(None)
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -412,7 +435,7 @@ def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1, plot=di
                                                    prefs.getFwhmrange()[0], prefs.getFwhmrange()[1],
                                                    plot=plot)
 	    else:
-		print >> sys.stderr, "No source with appropriate FWHM found!!"
+		raise RuntimeError("No source with appropriate FWHM found!!")
 		mode = min = max = 2.35/(1.0 - 1.0/psfex.cvar.INTERPFAC)
 
                 fwhmmin = np.zeros(ncat) + min
@@ -430,7 +453,7 @@ def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1, plot=di
                         compute_fwhmrange(fwhms[i], prefs.getMaxvar(),
                                           prefs.getFwhmrange()[0], prefs.getFwhmrange()[1], plot=plot)
 		else:
-		    print >> sys.stderr, "No source with appropriate FWHM found!!"
+		    raise RuntimeError("No source with appropriate FWHM found!!")
 		    fwhmmode[i] = fwhmmin[i] = fwhmmax[i] = 2.35/(1.0 - 1.0/psfex.cvar.INTERPFAC)
 
     # Read the samples
@@ -465,7 +488,8 @@ def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1, plot=di
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def showPsf(psf, set, ext=None, wcsData=None, trim=0, nspot=5, frame=None, title=None):
+def showPsf(psf, set, ext=None, wcsData=None, trim=0, nspot=5,
+            diagnostics=False, outDir="", frame=None, title=None):
     """Show a PSF on ds9"""
 
     if ext is not None:
@@ -510,7 +534,8 @@ def showPsf(psf, set, ext=None, wcsData=None, trim=0, nspot=5, frame=None, title
             mos.append(im)
 
     mosaic = mos.makeMosaic(mode=nx)
-    ds9.mtv(mosaic, frame=frame, title=title)
+    if frame is not None:
+        ds9.mtv(mosaic, frame=frame, title=title)
     #
     # Figure out the WCS for the mosaic
     #
@@ -518,7 +543,6 @@ def showPsf(psf, set, ext=None, wcsData=None, trim=0, nspot=5, frame=None, title
     for x, y, i in zip((xpos[0], xpos[-1]), (ypos[0], ypos[-1]), (0, mos.nImage - 1)):
         bbox = mos.getBBox(i)
         mosx, mosy = bbox.getMinX() + 0.5*(bbox.getWidth() - 1), bbox.getMinY() + 0.5*(bbox.getHeight() - 1)
-        import lsst.afw.geom as afwGeom
         pos.append([afwGeom.PointD(mosx, mosy), wcs.pixelToSky(afwGeom.PointD(x, y))])
 
     CD = []
@@ -530,9 +554,14 @@ def showPsf(psf, set, ext=None, wcsData=None, trim=0, nspot=5, frame=None, title
     if ext is not None:
         title = "%s-%d" % (title, ext)
 
-    ds9.mtv(mosaic, frame=frame, title=title, wcs=mosWcs)
+    if frame is not None:
+        ds9.mtv(mosaic, frame=frame, title=title, wcs=mosWcs)
 
-    mosaic.writeFits("%s-mod.fits" % title, mosWcs.getFitsMetadata())
+    if diagnostics:
+        outFile = "%s-mod.fits" % title
+        if outDir:
+            outFile = os.path.join(outDir, outFile)
+        mosaic.writeFits(outFile, mosWcs.getFitsMetadata())
 
     #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -555,7 +584,17 @@ def showPsf(psf, set, ext=None, wcsData=None, trim=0, nspot=5, frame=None, title
 
         mos.append(smos.makeMosaic(mode="x"))
         
-    mosaic = mos.makeMosaic(title=title, frame=frame+1)
+    mosaic = mos.makeMosaic(title=title)
+
+    if frame is not None:
+        ds9.mtv(mosaic, title=title, frame=frame+1)
+
+    if diagnostics:
+        outFile = "%s-psfstars.fits" % title
+        if outDir:
+            outFile = os.path.join(outDir, outFile)
+    
+        mosaic.writeFits(outFile)
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -583,26 +622,25 @@ def getLsstFlags(tab=None):
         flags = 0
         for i, k in enumerate(flagKeys):
             if k == "parent":
-                isSet = tab.get("deblend.nchild") > 0
+                try:
+                    isSet = tab.get("deblend.nchild") > 0
+                except KeyError:
+                    isSet = 0
             else:
                 isSet = tab.get(k)
             flags = np.bitwise_or(flags, np.where(isSet, 1<<i, 0))
 
     return flags
 
-def getFlags():
-    if args.lsst:
-        return getLsstFlags(None)
-    else:
-        return {1   : "flux blended",
-                2   : "blended",
-                4   : "saturated",
-                8   : "edge",
-                16  : "bad aperture",
-                32  : "bad isophotal",
-                64  : "memory error (deblend)",
-                128 : "memory error (extract)",
-                }
+def guessCalexp(fileName):
+    for guess in [
+        re.sub("/src", r"", fileName),
+        re.sub("(SRC([^.]+))", r"CORR\2-exp", fileName),
+        ]:
+        if guess != fileName and os.path.exists(guess):
+            return guess
+
+    raise RuntimeError("Unable to find a calexp to go with %s" % fileName)
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -622,9 +660,14 @@ def makeitLsst(prefs, context, saveWcs=False, plot=dict()):
         wcssList.append(wcss)
         with pyfits.open(cat) as pf:
             # Hack: I want the WCS so I'll guess where the calexp is to be found
-            calexpFile = re.sub("(SRC([^.]+))", r"CORR\2-exp", cat)
+            calexpFile = guessCalexp(cat)
             md = afwImage.readMetadata(calexpFile)
             wcs = afwImage.makeWcs(md)
+
+            if not wcs:
+                crval = afwCoord.makeCoord(afwCoord.ICRS, 0.0*afwGeom.degrees, 0.0*afwGeom.degrees)
+                wcs = afwImage.makeWcs(crval, afwGeom.PointD(0, 0), 1.0, 0, 0, 1.0)
+            
             naxis1, naxis2 = md.get("NAXIS1"), md.get("NAXIS2")
             # Find how many rows there are in the catalogue
             md = afwImage.readMetadata(cat)
@@ -703,7 +746,7 @@ def read_samplesLsst(prefs, set, filename, frmin, frmax, ext, next, catindex, co
     vignet = np.empty(nobj*vigw*vigh, "float32").reshape(nobj, vigw, vigh)
 
     # Hack: I want the WCS so I'll guess where the calexp is to be found
-    calexpFile = re.sub("(SRC([^.]+))", r"CORR\2-exp", filename)
+    calexpFile = guessCalexp(filename)
     mi = afwImage.MaskedImageF(calexpFile)
     backnoise2 = np.median(mi.getVariance().getArray())
     gain = 1.0
@@ -861,7 +904,7 @@ def load_samplesLsst(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1, plo
                                                    prefs.getFwhmrange()[0], prefs.getFwhmrange()[1],
                                                    plot=plot)
 	    else:
-		print >> sys.stderr, "No source with appropriate FWHM found!!"
+		raise RuntimeError("No source with appropriate FWHM found!!")
 		mode = min = max = 2.35/(1.0 - 1.0/psfex.cvar.INTERPFAC)
 
                 fwhmmin = np.zeros(ncat) + min
@@ -879,7 +922,7 @@ def load_samplesLsst(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1, plo
                         compute_fwhmrange(fwhms[i], prefs.getMaxvar(),
                                           prefs.getFwhmrange()[0], prefs.getFwhmrange()[1], plot=plot)
 		else:
-		    print >> sys.stderr, "No source with appropriate FWHM found!!"
+		    raise RuntimeError("No source with appropriate FWHM found!!")
 		    fwhmmode[i] = fwhmmin[i] = fwhmmax[i] = 2.35/(1.0 - 1.0/psfex.cvar.INTERPFAC)
 
     # Read the samples
@@ -985,6 +1028,8 @@ if __name__ == "__main__":
                         help="Desired plots", default=[])
     parser.add_argument('--ds9', type=int, 
                         help="Show the PSF on ds9", default=None)
+    parser.add_argument('--diagnostics', action="store_true",
+                        help="Write output diagnostic plots to outDir")
     parser.add_argument('--verbose', action="store_true", help="How chatty should I be?", default=False)
     
     argv = sys.argv[:]                  # argparse will mess with sys.argv
@@ -1013,22 +1058,28 @@ if __name__ == "__main__":
 
     plotKeys = ["fwhmHistogram", "showFlags", "showRejection"]
     if "help" in args.plot:
-        print "Valid plot types are %s" % " ".join(plotKeys)
+        print "Valid plot types are %s" % " ".join(["none"] + plotKeys)
         sys.exit(0)
     plot = {}
-    for k in args.plot:
-        if k not in plotKeys:
-            print >> sys.stderr, "Unknown plot type %s (Valid types are %s)" % (k, " ".join(plotKeys))
-            sys.exit(1)
-        plot[k] = True
+    if "none" not in args.plot:
+        for k in args.plot:
+            if k not in plotKeys:
+                print >> sys.stderr, "Unknown plot type %s (Valid types are %s)" % (k, " ".join(plotKeys))
+                sys.exit(1)
+            plot[k] = True
 
     psfs, sets, wcss = makeitLsst(prefs, context, saveWcs=True, plot=plot) if args.lsst else \
         makeit(prefs, context, saveWcs=True, plot=plot)
 
-    if args.ds9 is not None:
+    if args.diagnostics or args.ds9 is not None:
         ds9Frame = args.ds9
         for i in range(len(sets)):
             for ext in range(len(psfs[i])):
-                showPsf(psfs[i], sets[i], ext, wcss[i], nspot=3, trim=5, frame=ds9Frame,
-                        title=os.path.splitext(os.path.split(prefs.getCatalogs()[i])[1])[0])
-                ds9Frame += 2
+                catDir, catFile = os.path.split(prefs.getCatalogs()[i])
+
+                showPsf(psfs[i], sets[i], ext, wcss[i], nspot=3, trim=5,
+                        frame=ds9Frame, diagnostics=args.diagnostics,
+                        outDir=catDir, title=os.path.splitext(catFile)[0])
+
+                if ds9Frame is not None:
+                    ds9Frame += 2
