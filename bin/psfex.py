@@ -256,7 +256,7 @@ def getSexFlags(*args):
             }
 
 def select_candidates(set, prefs, frmin, frmax, 
-                      flags, flux, fluxerr, fluxrad, elong, vignet,
+                      flags, flux, fluxerr, rmsSize, elong, vignet,
                       plot=dict(), title=""):
     maxbad = prefs.getBadpixNmax()
     maxbadflag = prefs.getBadpixFlag()
@@ -266,54 +266,39 @@ def select_candidates(set, prefs, frmin, frmax,
     sn = flux/np.where(fluxerr > 0, fluxerr, 1)
     sn[fluxerr <= 0] = -psfex.cvar.BIG
     #---- Apply some selection over flags, fluxes...
-    # Can we plot, and is at least one plot request live?
-    doPlot = plt and sum([v for k, v in plot.items() if k in ["showFlags", "showRejection"]])
-    if doPlot:
-        imag = -2.5*np.log10(flux)
-        plt.clf()
+    plotFlags = plot.get("showFlags") if plt else False
+    plotRejection = plot.get("showRejection") if plt else False
+
     bad = flags & prefs.getFlagMask() != 0
     set.setBadFlags(int(sum(bad != 0)))
 
-    if doPlot:
-        alpha = 0.5
-        if plot.get("showFlags"):
-            labels = getFlags()
-
-            isSet = np.where(flags == 0x0)[0]
-            plt.plot(imag[isSet], fluxrad[isSet], 'o', alpha=alpha, label="good")
-
-            for i in range(16):
-                mask = 1 << i
-                if mask & prefs.getFlagMask():
-                    isSet = np.where(np.bitwise_and(flags, mask))[0]
-                    if isSet.any():
-                        plt.plot(imag[isSet], fluxrad[isSet], 'o', alpha=alpha, label=labels[mask])
-        elif plot.get("showRejection"):
-            plt.plot(imag[bad], fluxrad[bad], 'o', alpha=alpha, label="flags %d" % sum(bad!=0))
+    if plotRejection:
+        selectionVectors = []
+        selectionVectors.append((bad, "flags %d" % sum(bad!=0)))
 
     dbad = sn < minsn
     set.setBadSN(int(sum(dbad)))
     bad = np.logical_or(bad, dbad)
-    if plot.get("showRejection"):
-        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=alpha, label="S/N %d" % sum(dbad))
+    if plotRejection:
+        selectionVectors.append((dbad, "S/N %d" % sum(dbad)))
 
-    dbad = fluxrad < frmin
+    dbad = rmsSize < frmin
     set.setBadFrmin(int(sum(dbad)))
     bad = np.logical_or(bad, dbad)
-    if plot.get("showRejection"):
-        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=alpha, label="frmin %d" % sum(dbad))
+    if plotRejection:
+        selectionVectors.append((dbad, "frmin %d" % sum(dbad)))
 
-    dbad = fluxrad > frmax
+    dbad = rmsSize > frmax
     set.setBadFrmax(int(sum(dbad)))
     bad = np.logical_or(bad, dbad)
-    if plot.get("showRejection"):
-        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=alpha, label="frmax %d" % sum(dbad))
+    if plotRejection:
+        selectionVectors.append((dbad, "frmax %d" % sum(dbad)))
 
     dbad = elong > maxelong
     set.setBadElong(int(sum(dbad)))
     bad = np.logical_or(bad, dbad)
-    if plot.get("showRejection"):
-        plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=alpha, label="elong %d" % sum(dbad))
+    if plotRejection:
+        selectionVectors.append((dbad, "elong %d" % sum(dbad)))
 
     #-- ... and check the integrity of the sample
     if maxbadflag:
@@ -321,19 +306,38 @@ def select_candidates(set, prefs, frmin, frmax,
         dbad = nbad > maxbad
         set.setBadPix(int(sum(dbad)))
         bad = np.logical_or(bad, dbad)
-        if plot.get("showRejection"):
-            plt.plot(imag[dbad], fluxrad[dbad], 'o', alpha=alpha, label="badpix %d" % sum(dbad))
-
+        if plotRejection:
+            selectionVectors.append((dbad, "badpix %d" % sum(dbad)))
 
     good = np.logical_not(bad)
-    if doPlot:
-        plt.plot(imag[good], fluxrad[good], 'o', color="black", label="selected")
+    if plotFlags or plotRejection:
+        imag = -2.5*np.log10(flux)
+        plt.clf()
+
+        alpha = 0.5
+        if plotFlags:
+            labels = getFlags()
+
+            isSet = np.where(flags == 0x0)[0]
+            plt.plot(imag[isSet], rmsSize[isSet], 'o', alpha=alpha, label="good")
+
+            for i in range(16):
+                mask = 1 << i
+                if mask & prefs.getFlagMask():
+                    isSet = np.where(np.bitwise_and(flags, mask))[0]
+                    if isSet.any():
+                        plt.plot(imag[isSet], rmsSize[isSet], 'o', alpha=alpha, label=labels[mask])
+        else:
+            for bad, label in selectionVectors:
+                plt.plot(imag[bad], rmsSize[bad], 'o', alpha=alpha, label=label)
+
+        plt.plot(imag[good], rmsSize[good], 'o', color="black", label="selected")
         [plt.axhline(_, color='red') for _ in [frmin, frmax]]
         plt.xlim(np.median(imag[good]) + 5*np.array([-1, 1]))
         plt.ylim(-0.1, 10)
         plt.legend(loc=2)
         plt.xlabel("Instrumental Magnitude")
-        plt.ylabel("fluxrad")
+        plt.ylabel("rmsSize")
         plt.title("%s %d selected" % (title, sum(good)))
 
         raw_input("Continue? ")
@@ -410,7 +414,7 @@ def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1, plot=di
                                 break
                     elif tab.name == "LDAC_OBJECTS":
                         #-------- Fill the FWHM array
-                        hl = tab.data["FLUX_RADIUS"]
+                        rmsSize = tab.data["FLUX_RADIUS"]
                         fmax = tab.data["FLUX_MAX"]
                         flags = tab.data["FLAGS"]
                         elong = tab.data["ELONGATION"]
@@ -419,7 +423,7 @@ def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1, plot=di
                         good = np.logical_and(fmax/backnoise > minsn,
                                               np.logical_not(flags & prefs.getFlagMask()))
                         good = np.logical_and(good, elong < maxelong)
-                        fwhm=2.0*hl
+                        fwhm=2.0*rmsSize
                         good = np.logical_and(good, fwhm >= min)
                         good = np.logical_and(good, fwhm < max)
                         fwhms[i] = fwhm[good]
@@ -540,10 +544,14 @@ def showPsf(psf, set, ext=None, wcsData=None, trim=0, nspot=5,
     # Figure out the WCS for the mosaic
     #
     pos = []
-    for x, y, i in zip((xpos[0], xpos[-1]), (ypos[0], ypos[-1]), (0, mos.nImage - 1)):
-        bbox = mos.getBBox(i)
-        mosx, mosy = bbox.getMinX() + 0.5*(bbox.getWidth() - 1), bbox.getMinY() + 0.5*(bbox.getHeight() - 1)
-        pos.append([afwGeom.PointD(mosx, mosy), wcs.pixelToSky(afwGeom.PointD(x, y))])
+    if False:
+        for x, y, i in zip((xpos[0], xpos[-1]), (ypos[0], ypos[-1]), (0, mos.nImage - 1)):
+            bbox = mos.getBBox(i)
+            mosx, mosy = bbox.getMinX() + 0.5*(bbox.getWidth() - 1), bbox.getMinY() + 0.5*(bbox.getHeight() - 1)
+            pos.append([afwGeom.PointD(mosx, mosy), wcs.pixelToSky(afwGeom.PointD(x, y))])
+    else:
+        pos.append([afwGeom.PointD(0, 0), wcs.pixelToSky(afwGeom.PointD(0, 0))])
+        pos.append([afwGeom.PointD(*mosaic.getDimensions()), wcs.pixelToSky(afwGeom.PointD(naxis1, naxis2))])
 
     CD = []
     for i in range(2):
@@ -728,7 +736,7 @@ def read_samplesLsst(prefs, set, filename, frmin, frmax, ext, next, catindex, co
     iyy = tab.get("%s.yy" % shape)
     ixy = tab.get("%s.xy" % shape)
     
-    fluxrad = np.sqrt(0.5*(ixx + iyy))
+    rmsSize = np.sqrt(0.5*(ixx + iyy))
     elong = 0.5*(ixx - iyy)/(ixx + iyy)
 
     flux = tab.get(prefs.getPhotfluxRkey())
@@ -788,7 +796,7 @@ def read_samplesLsst(prefs, set, filename, frmin, frmax, ext, next, catindex, co
 
     # Now examine each vector of the shipment
     good = select_candidates(set, prefs, frmin, frmax, 
-                             flags, flux, fluxErr, fluxrad, elong, vignet,
+                             flags, flux, fluxErr, rmsSize, elong, vignet,
                              plot=plot, title="%s[%d]" % (filename, ext + 1) if next > 1 else filename)
     #
     # Insert the good candidates into the set
@@ -814,7 +822,7 @@ def read_samplesLsst(prefs, set, filename, frmin, frmax, ext, next, catindex, co
         sample.setGain(gain)
         sample.setX(float(xm[i]))
         sample.setY(float(ym[i]))
-        sample.setFluxrad(float(fluxrad[i]))
+        sample.setFluxrad(float(rmsSize[i]))
 
         for j in range(set.getNcontext()):
             sample.setContext(j, float(contextvalp[j][i]))
@@ -877,7 +885,7 @@ def load_samplesLsst(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1, plo
             iyy = tab.get("%s.yy" % shape)
             ixy = tab.get("%s.xy" % shape)
 
-            hl = np.sqrt(0.5*(ixx + iyy))
+            rmsSize = np.sqrt(0.5*(ixx + iyy))
             elong = 0.5*(ixx - iyy)/(ixx + iyy)
 
             flux = tab.get(prefs.getPhotfluxRkey())
@@ -888,7 +896,7 @@ def load_samplesLsst(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1, plo
             good = np.logical_and(flux/fluxErr > minsn,
                                   np.logical_not(flags & prefs.getFlagMask()))
             good = np.logical_and(good, elong < maxelong)
-            fwhm = 2.0*hl
+            fwhm = 2.0*rmsSize
             good = np.logical_and(good, fwhm >= min)
             good = np.logical_and(good, fwhm < max)
             fwhms[i] = fwhm[good]
