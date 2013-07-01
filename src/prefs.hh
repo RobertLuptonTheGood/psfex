@@ -68,6 +68,9 @@ public:
    std::pair<double, double> getFwhmrange() const {
       return std::make_pair(impl.fwhmrange[0], impl.fwhmrange[1]);
    }
+    std::pair<int, int> getPsfsize() const {
+        return std::make_pair(impl.psf_size[0], impl.psf_size[1]);
+   }
    int getAutoselectFlag() const { return impl.autoselect_flag; }
    int getFlagMask() const { return impl.flag_mask; }
    double getMaxvar() const { return impl.maxvar; }

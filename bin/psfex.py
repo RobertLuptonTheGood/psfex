@@ -7,6 +7,7 @@ try:
     import matplotlib.pyplot as plt
 except ImportError:
     plt = None
+import lsst.afw.table as afwTable
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 def splitFitsCard(line):
@@ -81,7 +82,7 @@ def compute_fwhmrange(fwhm, maxvar, minin, maxin, plot=dict(fwhmHistogram=False)
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def read_samples(set, filename, frmin, frmax, ext, next, catindex, context, pcval,
+def read_samples(prefs, set, filename, frmin, frmax, ext, next, catindex, context, pcval,
                  plot=dict(showFlags=False, showRejection=False)):
     # allocate a new set iff set is None
     if not set:
@@ -255,26 +256,18 @@ def select_candidates(set, prefs, frmin, frmax,
     if doPlot:
         imag = -2.5*np.log10(flux)
         plt.clf()
-    bad = flags & prefs.getFlagMask()
+    bad = flags & prefs.getFlagMask() != 0
     set.setBadFlags(int(sum(bad != 0)))
 
     if doPlot:
         alpha = 0.5
         if plot.get("showFlags"):
-            labels = {1   : "flux blended",
-                      2   : "blended",
-                      4   : "saturated",
-                      8   : "edge",
-                      16  : "bad aperture",
-                      32  : "bad isophotal",
-                      64  : "memory error (deblend)",
-                      128 : "memory error (extract)",
-                      }
+            labels = getFlags()
 
             isSet = np.where(flags == 0x0)[0]
             plt.plot(imag[isSet], fluxrad[isSet], 'o', alpha=alpha, label="good")
 
-            for i in range(7):
+            for i in range(16):
                 mask = 1 << i
                 if mask & prefs.getFlagMask():
                     isSet = np.where(np.bitwise_and(flags, mask))[0]
@@ -452,7 +445,7 @@ def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1, plot=di
             extensions = [ext]
 
         for e in extensions:
-            set = read_samples(set, fileName, fwhmmin[i]/2.0, fwhmmax[i]/2.0,
+            set = read_samples(prefs, set, fileName, fwhmmin[i]/2.0, fwhmmax[i]/2.0,
                                e, next, i, context, context.getPc(i) if context.getNpc() else None, plot=plot);
 
 	if fwhmmode[i] < mode:
@@ -472,7 +465,7 @@ def load_samples(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1, plot=di
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def showPsf(psf, set, ext=None, wcsData=None, trim=0, frame=None, title=None):
+def showPsf(psf, set, ext=None, wcsData=None, trim=0, nspot=5, frame=None, title=None):
     """Show a PSF on ds9"""
 
     if ext is not None:
@@ -493,7 +486,6 @@ def showPsf(psf, set, ext=None, wcsData=None, trim=0, frame=None, title=None):
             naxis[i] = cmax + cmin          # a decent guess
   
     import lsst.afw.display.utils as ds9Utils
-    nspot = 5
     if naxis[0] > naxis[1]:
         nx, ny = int(nspot*naxis[0]/float(naxis[1]) + 0.5), nspot
     else:
@@ -553,7 +545,10 @@ def showPsf(psf, set, ext=None, wcsData=None, trim=0, frame=None, title=None):
         smos = ds9Utils.Mosaic(gutter=2, background=-0.003)
         for func in [s.getVig, s.getVigResi]:
             arr = func()
-            arr /= s.getNorm()
+            if func == s.getVig:
+                norm = float(arr.max()) if True else s.getNorm()
+
+            arr /= norm
             im = afwImage.ImageF(*arr.shape)
             im.getArray()[:] = arr
             smos.append(im)
@@ -564,7 +559,360 @@ def showPsf(psf, set, ext=None, wcsData=None, trim=0, frame=None, title=None):
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+def getLsstFlags(tab=None):
+    flagKeys = [
+        "flags.pixel.edge",
+        #"flags.pixel.interpolated.any",
+        #"flags.pixel.interpolated.center",
+        #"flags.pixel.saturated.any",
+        "flags.pixel.saturated.center",
+        #"flags.pixel.cr.any",
+        "flags.pixel.cr.center",
+        "flags.pixel.bad",
+        #"flags.pixel.suspect.any",
+        "flags.pixel.suspect.center",
+        "flux.psf.flags",
+        "parent",
+        ]
+
+    if tab is None:
+        flags = {}
+        for i, k in enumerate(flagKeys):
+            flags[1<<i] = re.sub(r"^flags\.pixel\.", "", k)
+    else:
+        flags = 0
+        for i, k in enumerate(flagKeys):
+            if k == "parent":
+                isSet = tab.get("deblend.nchild") > 0
+            else:
+                isSet = tab.get(k)
+            flags = np.bitwise_or(flags, np.where(isSet, 1<<i, 0))
+
+    return flags
+
+def getFlags():
+    if args.lsst:
+        return getLsstFlags(None)
+    else:
+        return {1   : "flux blended",
+                2   : "blended",
+                4   : "saturated",
+                8   : "edge",
+                16  : "bad aperture",
+                32  : "bad isophotal",
+                64  : "memory error (deblend)",
+                128 : "memory error (extract)",
+                }
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def makeitLsst(prefs, context, saveWcs=False, plot=dict()):
+    """This is the python wrapper that reads lsst tables"""
+    # Create an array of PSFs (one PSF for each extension)
+    if prefs.getVerboseType() != prefs.QUIET:
+        print "----- %d input catalogues:" % prefs.getNcat()
+
+    if saveWcs:                         # only needed for making plots
+        wcssList = []
+
+    fields = psfex.vectorField()
+    for cat in prefs.getCatalogs():
+        field = psfex.Field(cat)
+        wcss = []
+        wcssList.append(wcss)
+        with pyfits.open(cat) as pf:
+            # Hack: I want the WCS so I'll guess where the calexp is to be found
+            calexpFile = re.sub("(SRC([^.]+))", r"CORR\2-exp", cat)
+            md = afwImage.readMetadata(calexpFile)
+            wcs = afwImage.makeWcs(md)
+            naxis1, naxis2 = md.get("NAXIS1"), md.get("NAXIS2")
+            # Find how many rows there are in the catalogue
+            md = afwImage.readMetadata(cat)
+
+            field.addExt(wcs, naxis1, naxis2, md.get("NAXIS2"))
+            if saveWcs:
+                wcss.append((wcs, naxis1, naxis2))
+
+        field.finalize()
+        fields.append(field)
+
+    next = fields[0].getNext()          # number of extensions
+
+    psfstep = prefs.getPsfStep()
+
+    sets = psfex.vectorSet()
+    for set in load_samplesLsst(prefs, context, plot=plot):
+        sets.append(set)
+
+    psfex.makeit(fields, sets)
+
+    ret = [[f.getPsfs() for f in fields], sets]
+    if saveWcs:
+        ret.append(wcssList)
+
+    return ret
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def read_samplesLsst(prefs, set, filename, frmin, frmax, ext, next, catindex, context, pcval,
+                     plot=dict(showFlags=False, showRejection=False)):
+    # allocate a new set iff set is None
+    if not set:
+	set = psfex.Set(context)
+
+    cmin, cmax = None, None
+    if set.getNcontext():
+        cmin = np.empty(set.getNcontext())
+        cmax = np.empty(set.getNcontext())
+        for i in range(set.getNcontext()):
+	    if set.getNsample():
+		cmin[i] = set.getContextOffset(i) - set.getContextScale(i)/2.0;
+		cmax[i] = cmin[i] + set.getContextScale(i);
+	    else:
+		cmin[i] =  psfex.cvar.BIG;
+		cmax[i] = -psfex.cvar.BIG;
+    #
+    # Read data
+    #
+    tab = afwTable.SourceCatalog.readFits(filename)
+
+    centroid = tab.getCentroidDefinition()
+    xm = tab.get("%s.x" % centroid)
+    ym = tab.get("%s.y" % centroid)
+
+    shape = tab.getShapeDefinition()
+    ixx = tab.get("%s.xx" % shape)
+    iyy = tab.get("%s.yy" % shape)
+    ixy = tab.get("%s.xy" % shape)
+    
+    fluxrad = np.sqrt(0.5*(ixx + iyy))
+    elong = 0.5*(ixx - iyy)/(ixx + iyy)
+
+    flux = tab.get(prefs.getPhotfluxRkey())
+    fluxErr = tab.get(prefs.getPhotfluxerrRkey())
+    flags = getLsstFlags(tab)
+
+    nobj = len(xm)
+    #
+    # Now the VIGNET data
+    #
+    vigw, vigh = 35, 35 # [prefs.getPsfsize()[i] for i in range(2)]
+    if set.empty():
+        set.setVigSize(vigw, vigh)
+        
+    vignet = np.empty(nobj*vigw*vigh, "float32").reshape(nobj, vigw, vigh)
+
+    # Hack: I want the WCS so I'll guess where the calexp is to be found
+    calexpFile = re.sub("(SRC([^.]+))", r"CORR\2-exp", filename)
+    mi = afwImage.MaskedImageF(calexpFile)
+    backnoise2 = np.median(mi.getVariance().getArray())
+    gain = 1.0
+
+    edgeBit = [k for k, v in getFlags().items() if v == "edge"][0]
+    
+    for i, xc, yc in zip(range(nobj), xm, ym):
+        try:
+            x, y = int(xc), int(yc)
+        except ValueError:
+            flags[i] |= edgeBit         # mark star as bad
+
+        try:
+            pstamp = mi[x - vigw//2:x + vigw//2 + 1, y - vigh//2:y + vigh//2 + 1]
+            vignet[i] = pstamp.getImage().getArray()
+        except Exception, e:
+            flags[i] |= edgeBit         # mark star as bad
+
+    # Try to load the set of context keys
+    pc = 0
+    contextvalp = []
+    for i, key in enumerate(context.getName()):
+        if context.getPcflag(i):
+            contextvalp.append(pcval[pc])
+            pc += 1
+        elif key[0] == ':':
+            try:
+                contextvalp.append(tab.header[key[1:]])
+            except KeyError:
+                raise RuntimeError("*Error*: %s parameter not found in the header of %s" %
+                                   (key[1:], filename))
+        else:
+            try:
+                contextvalp.append(tab.get(key))
+            except KeyError:
+                raise RuntimeError("*Error*: %s parameter not found in the header of %s" %
+                                   (key, filename))
+            set.setContextname(i, key)
+
+    # Now examine each vector of the shipment
+    good = select_candidates(set, prefs, frmin, frmax, 
+                             flags, flux, fluxErr, fluxrad, elong, vignet,
+                             plot=plot, title="%s[%d]" % (filename, ext + 1) if next > 1 else filename)
+    #
+    # Insert the good candidates into the set
+    #
+    if not vignet.dtype.isnative:
+        # without the swap setVig fails with "ValueError: 'unaligned arrays cannot be converted to C++'"
+        vignet = vignet.byteswap() 
+
+    for i in np.where(good)[0]:
+        sample = set.newSample()
+        sample.setCatindex(catindex)
+        sample.setExtindex(ext)
+
+        sample.setVig(vignet[i])
+        if False:
+            pstamp = afwImage.ImageF(*vignet[i].shape)
+            pstamp.getArray()[:] = sample.getVig()
+
+            ds9.mtv(pstamp)
+
+        sample.setNorm(float(flux[i]))
+        sample.setBacknoise2(backnoise2)
+        sample.setGain(gain)
+        sample.setX(float(xm[i]))
+        sample.setY(float(ym[i]))
+        sample.setFluxrad(float(fluxrad[i]))
+
+        for j in range(set.getNcontext()):
+            sample.setContext(j, float(contextvalp[j][i]))
+
+        set.finiSample(sample, prefs.getProfAccuracy())
+
+    #---- Update min and max
+    for j in range(set.getNcontext()):
+        cmin[j] = contextvalp[j][good].min()
+        cmax[j] = contextvalp[j][good].max()
+
+    # Update the scaling
+    if set.getNsample():
+        for i in range(set.getNcontext()):
+            set.setContextScale(i, cmax[i] - cmin[i])
+            set.setContextOffset(i, (cmin[i] + cmax[i])/2.0)
+
+    # Don't waste memory!
+    set.trimMemory()
+
+    return set
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def load_samplesLsst(prefs, context, ext=psfex.Prefs.ALL_EXTENSIONS, next=1, plot=dict()):
+    minsn = prefs.getMinsn()
+    maxelong = (prefs.getMaxellip() + 1.0)/(1.0 - prefs.getMaxellip()) if prefs.getMaxellip() < 1.0 else 100
+    min = prefs.getFwhmrange()[0]
+    max = prefs.getFwhmrange()[1]
+
+    filenames = prefs.getCatalogs()
+
+    ncat = len(filenames)
+    fwhmmin = np.empty(ncat)
+    fwhmmax = np.empty(ncat)
+    fwhmode = np.empty(ncat)
+    
+    if not prefs.getAutoselectFlag():
+        fwhmmin = np.zeros(ncat) + prefs.getFwhmrange()[0]
+        fwhmmax = np.zeros(ncat) + prefs.getFwhmrange()[1]
+        fwhmmode = (fwhmmin + fwhmmax)/2.0
+    else:
+        fwhms = {}
+  
+        #-- Try to estimate the most appropriate Half-light Radius range
+        #-- Get the Half-light radii
+	nobj = 0
+        for i, fileName in enumerate(filenames):
+            fwhms[i] = []
+                
+            if prefs.getVerboseType() != prefs.QUIET:
+                print "Examining Catalog #%d" % (i+1)
+
+            #---- Read input catalog
+            tab = afwTable.SourceCatalog.readFits(fileName)
+
+            #-------- Fill the FWHM array
+            shape = tab.getShapeDefinition()
+            ixx = tab.get("%s.xx" % shape)
+            iyy = tab.get("%s.yy" % shape)
+            ixy = tab.get("%s.xy" % shape)
+
+            hl = np.sqrt(0.5*(ixx + iyy))
+            elong = 0.5*(ixx - iyy)/(ixx + iyy)
+
+            flux = tab.get(prefs.getPhotfluxRkey())
+            fluxErr = tab.get(prefs.getPhotfluxerrRkey())
+
+            flags = getLsstFlags(tab)
+
+            good = np.logical_and(flux/fluxErr > minsn,
+                                  np.logical_not(flags & prefs.getFlagMask()))
+            good = np.logical_and(good, elong < maxelong)
+            fwhm = 2.0*hl
+            good = np.logical_and(good, fwhm >= min)
+            good = np.logical_and(good, fwhm < max)
+            fwhms[i] = fwhm[good]
+
+	if prefs.getVarType() == prefs.VAR_NONE:
+	    if nobj:
+                fwhms_all = np.empty(sum([len(l) for l in fwhms.values()]))
+                i = 0
+                for l in fwhms.values():
+                    fwhms_all[i:len(l)] = l
+                    i += len(l)
+		mode, min, max = compute_fwhmrange(fwhms_all, prefs.getMaxvar(),
+                                                   prefs.getFwhmrange()[0], prefs.getFwhmrange()[1],
+                                                   plot=plot)
+	    else:
+		print >> sys.stderr, "No source with appropriate FWHM found!!"
+		mode = min = max = 2.35/(1.0 - 1.0/psfex.cvar.INTERPFAC)
+
+                fwhmmin = np.zeros(ncat) + min
+                fwhmmax = np.zeros(ncat) + max
+                fwhmmode = np.zeros(ncat) + mode
+	else:
+            fwhmmode = np.empty(ncat)
+            fwhmmin = np.empty(ncat)
+            fwhmmax = np.empty(ncat)
+
+            for i in range(ncat):
+		nobj = len(fwhms[i])
+		if (nobj):
+                    fwhmmode[i], fwhmmin[i], fwhmmax[i] = \
+                        compute_fwhmrange(fwhms[i], prefs.getMaxvar(),
+                                          prefs.getFwhmrange()[0], prefs.getFwhmrange()[1], plot=plot)
+		else:
+		    print >> sys.stderr, "No source with appropriate FWHM found!!"
+		    fwhmmode[i] = fwhmmin[i] = fwhmmax[i] = 2.35/(1.0 - 1.0/psfex.cvar.INTERPFAC)
+
+    # Read the samples
+    mode = psfex.cvar.BIG               # mode of FWHM distribution
+
+    sets = []
+    for i, fileName in enumerate(filenames):
+        set = None
+        for ext in range(next):
+            set = read_samplesLsst(prefs, set, fileName, fwhmmin[i]/2.0, fwhmmax[i]/2.0,
+                                   ext, next, i, context,
+                                   context.getPc(i) if context.getNpc() else None, plot=plot);
+
+	if fwhmmode[i] < mode:
+	    mode = fwhmmode[i]
+
+        set.setFwhm(mode)
+
+        if prefs.getVerboseType() != prefs.QUIET:
+            if set.getNsample():
+                print "%d samples loaded." % set.getNsample()
+            else:
+                raise RuntimeError("No appropriate source found!!")
+
+        sets.append(set)
+
+    return sets
+
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
 def makeit(prefs, context, saveWcs=False, plot=dict()):
+    """This is the python wrapper for the original psfex that reads SExtractor outputs"""
     # Create an array of PSFs (one PSF for each extension)
     if prefs.getVerboseType() != prefs.QUIET:
         print "----- %d input catalogues:" % prefs.getNcat()
@@ -611,11 +959,6 @@ def makeit(prefs, context, saveWcs=False, plot=dict()):
     next = fields[0].getNext()          # number of extensions
 
     psfstep = prefs.getPsfStep()
-    psfsteps = None
-    if False:
-        nbasis = 0
-        psfbasis = None
-        psfbasiss = None
 
     sets = psfex.vectorSet()
     for set in load_samples(prefs, context, plot=plot):
@@ -635,6 +978,7 @@ if __name__ == "__main__":
     parser.add_argument('catalogs', type=str, nargs="+", help="Input catalogues from SExtractor")
     parser.add_argument('-c', type=str, dest="defaultsFile",
                         help="File containing default parameters", default="default.psfex")
+    parser.add_argument('--lsst', action="store_true", help="Read LSST data")
     parser.add_argument('--overrides', type=str, nargs="+",
                         help="Overrides for default parameters", default=[])
     parser.add_argument('--plot', type=str, nargs="+",
@@ -678,12 +1022,13 @@ if __name__ == "__main__":
             sys.exit(1)
         plot[k] = True
 
-    psfs, sets, wcss = makeit(prefs, context, saveWcs=True, plot=plot)
+    psfs, sets, wcss = makeitLsst(prefs, context, saveWcs=True, plot=plot) if args.lsst else \
+        makeit(prefs, context, saveWcs=True, plot=plot)
 
     if args.ds9 is not None:
         ds9Frame = args.ds9
         for i in range(len(sets)):
             for ext in range(len(psfs[i])):
-                showPsf(psfs[i], sets[i], ext, wcss[i], trim=5, frame=ds9Frame,
+                showPsf(psfs[i], sets[i], ext, wcss[i], nspot=3, trim=5, frame=ds9Frame,
                         title=os.path.splitext(os.path.split(prefs.getCatalogs()[i])[1])[0])
                 ds9Frame += 2
