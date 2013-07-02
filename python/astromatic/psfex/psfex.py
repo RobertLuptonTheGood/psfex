@@ -333,7 +333,7 @@ def select_candidates(set, prefs, frmin, frmax,
         plt.plot(imag[good], rmsSize[good], 'o', color="black", label="selected")
         [plt.axhline(_, color='red') for _ in [frmin, frmax]]
         plt.xlim(np.median(imag[good]) + 5*np.array([-1, 1]))
-        plt.ylim(-0.1, 10)
+        plt.ylim(-0.1, 2*frmax)
         plt.legend(loc=2)
         plt.xlabel("Instrumental Magnitude")
         plt.ylabel("rmsSize")
