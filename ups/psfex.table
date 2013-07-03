@@ -1,4 +1,4 @@
-setupRequired(base)
+setupRequired(meas_algorithms)
 setupRequired(atlas)
 setupRequired(fftwf)
 setupRequired(pyfits)

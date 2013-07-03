@@ -26,6 +26,8 @@ Python interface to psfex classes
 #include "vignet.h"
 static double PSFEX_SAVE_BIG = BIG;	// we'll #undef BIG and define a variable called BIG
 static double PSFEX_SAVE_INTERPFAC = INTERPFAC;
+
+#undef PI				/* defined in define.h, in M. Bertin's psfex */
 %}
 
 %init %{
@@ -70,3 +72,23 @@ static double PSFEX_SAVE_INTERPFAC = INTERPFAC;
    double BIG = PSFEX_SAVE_BIG;
    double INTERPFAC = PSFEX_SAVE_INTERPFAC;
 %}
+
+%{
+   #include "lsst/pex/logging.h"
+   #include "lsst/afw/cameraGeom.h"
+   #include "lsst/afw/image.h"
+   #include "lsst/afw/detection/FootprintSet.h"
+   #include "lsst/afw/math.h"
+   #include "lsst/afw/table.h"
+   #include "lsst/meas/algorithms.h"
+   #include "astromatic/psfex/PsfexPsf.h"
+%}
+%import "lsst/afw/math/mathLib.i"
+%import "lsst/afw/detection/detectionLib.i"
+%import "lsst/meas/algorithms/algorithmsLib.i"
+
+%declareTablePersistable(PsfexPsf, astromatic::psfex::PsfexPsf);
+
+%include "astromatic/psfex/PsfexPsf.h"
+
+%lsst_persistable(astromatic::psfex::PsfexPsf);
