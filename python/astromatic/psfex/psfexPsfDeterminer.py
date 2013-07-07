@@ -19,9 +19,9 @@
 # the GNU General Public License along with this program.  If not, 
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
+import os
 import sys
-
-import numpy
+import numpy as np
 
 import lsst.daf.base as dafBase
 import lsst.pex.config as pexConfig
@@ -144,49 +144,6 @@ class PsfexPsfDeterminer(object):
         self.debugLog = pexLog.Debug("meas.algorithms.psfDeterminer")
         self.warnLog = pexLog.Log(pexLog.getDefaultLog(), "meas.algorithms.psfDeterminer")
 
-    def _fitPsf(self, exposure, psfCellSet, kernelSize, nEigenComponents):
-        #
-        # Loop trying to use nEigenComponents, but allowing smaller numbers if necessary
-        #
-        for nEigen in range(nEigenComponents, 0, -1):
-            # Determine KL components
-            try:
-                kernel, eigenValues = measAlg.createKernelFromPsfCandidates(
-                    psfCellSet, exposure.getDimensions(), exposure.getXY0(), nEigen,
-                    self.config.spatialOrder, kernelSize, self.config.nStarPerCell,
-                    bool(self.config.constantWeight))
-
-                break                   # OK, we can get nEigen components
-            except pexExceptions.LsstCppException, e:
-                if not isinstance(e.message, pexExceptions.LengthErrorException):
-                    raise
-
-                if nEigen == 1:         # can't go any lower
-                    raise
-                    
-                msg = e.message.what().strip().split("\n")[-1] # message from exception
-                msg = msg.split(":")[-1].strip()               # remove "0: Message: " prefix
-
-                self.warnLog.log(pexLog.Log.WARN, "%s: reducing number of eigen components" % msg)
-        #
-        # We got our eigen decomposition so let's use it
-        #
-        # Express eigenValues in units of reduced chi^2 per star
-        size = kernelSize + 2*self.config.borderWidth
-        nu = size*size - 1                  # number of degrees of freedom/star for chi^2    
-        eigenValues = [l/float(measAlg.countPsfCandidates(psfCellSet, self.config.nStarPerCell)*nu)
-                       for l in eigenValues]
-
-        # Fit spatial model
-        status, chi2 = measAlg.fitSpatialKernelFromPsfCandidates(
-            kernel, psfCellSet, bool(self.config.nonLinearSpatialFit),
-            self.config.nStarPerCellSpatialFit, self.config.tolerance, self.config.lam)
-
-        psf = psfex.PsfexPsf(kernel)
-
-        return psf, eigenValues, nEigen, chi2
-
-
     def determinePsf(self, exposure, psfCandidateList, metadata=None, flagKey=None):
         """Determine a PSFEX PSF model for an exposure given a list of PSF candidates
         
@@ -196,340 +153,197 @@ class PsfexPsfDeterminer(object):
         @param[in,out] metadata  a home for interesting tidbits of information
         @param[in] flagKey: schema key used to mark sources actually used in PSF determination
     
-        @return psf: an lsst.meas.algorithms.PsfexPsf
+        @return psf: an astromatic.psfex.PsfexPsf
         """
+        OLD = False                     # used to flag unconverted-but-maybe-useful pcaPsf code
+
         import lsstDebug
         display = lsstDebug.Info(__name__).display 
-        displayExposure = lsstDebug.Info(__name__).displayExposure     # display the Exposure + spatialCells 
-        displayPsfCandidates = lsstDebug.Info(__name__).displayPsfCandidates # show the viable candidates 
-        displayIterations = lsstDebug.Info(__name__).displayIterations # display on each PSF iteration 
-        displayPsfComponents = lsstDebug.Info(__name__).displayPsfComponents # show the PSFEX components
+        displayExposure = display and \
+            lsstDebug.Info(__name__).displayExposure     # display the Exposure + spatialCells 
+        displayPsfCandidates = display and \
+            lsstDebug.Info(__name__).displayPsfCandidates # show the viable candidates 
+        if OLD:
+            displayPsfComponents = lsstDebug.Info(__name__).displayPsfComponents # show the PSFEX components
         displayResiduals = lsstDebug.Info(__name__).displayResiduals         # show residuals
         displayPsfMosaic = lsstDebug.Info(__name__).displayPsfMosaic   # show mosaic of reconstructed PSF(x,y)
         matchKernelAmplitudes = lsstDebug.Info(__name__).matchKernelAmplitudes # match Kernel amplitudes for spatial plots
-        keepMatplotlibPlots = lsstDebug.Info(__name__).keepMatplotlibPlots # Keep matplotlib alive post mortem
-        displayPsfSpatialModel = lsstDebug.Info(__name__).displayPsfSpatialModel # Plot spatial model?
-        showBadCandidates = lsstDebug.Info(__name__).showBadCandidates # Include bad candidates 
+        if OLD:
+            keepMatplotlibPlots = lsstDebug.Info(__name__).keepMatplotlibPlots # Keep matplotlib alive post mortem
+            displayPsfSpatialModel = lsstDebug.Info(__name__).displayPsfSpatialModel # Plot spatial model?
+        if OLD:
+            showBadCandidates = lsstDebug.Info(__name__).showBadCandidates # Include bad candidates 
         normalizeResiduals = lsstDebug.Info(__name__).normalizeResiduals # Normalise residuals by object amplitude 
-        pause = lsstDebug.Info(__name__).pause                         # Prompt user after each iteration?
+        #pause = lsstDebug.Info(__name__).pause                         # Prompt user after each iteration?
          
         if display > 1:
             pause = True
 
         mi = exposure.getMaskedImage()
         
-        if len(psfCandidateList) == 0:
+        nCand = len(psfCandidateList)
+        if nCand == 0:
             raise RuntimeError("No PSF candidates supplied.")
-
-        # construct and populate a spatial cell set
-        bbox = mi.getBBox(afwImage.PARENT)
-        psfCellSet = afwMath.SpatialCellSet(bbox, self.config.sizeCellX, self.config.sizeCellY)
-        sizes = numpy.ndarray(len(psfCandidateList))
+        #
+        # How big should our PSF models be?
+        #
+        sizes = np.empty(nCand)
         for i, psfCandidate in enumerate(psfCandidateList):
-            try:
-                psfCellSet.insertCandidate(psfCandidate)
-            except Exception, e:
-                self.debugLog.debug(2, "Skipping PSF candidate %d of %d: %s" % (i, len(psfCandidateList), e))
-                continue
             source = psfCandidate.getSource()
-
             quad = afwEll.Quadrupole(source.getIxx(), source.getIyy(), source.getIxy())
-            axes = afwEll.Axes(quad)
-            sizes[i] = axes.getA()
-            
-        nEigenComponents = self.config.nEigenComponents # initial version
+            rmsSize = quad.getTraceRadius()
+            sizes[i] = rmsSize
 
         if self.config.kernelSize >= 15:
             self.debugLog.debug(1, \
                 "WARNING: NOT scaling kernelSize by stellar quadrupole moment, but using absolute value")
             actualKernelSize = int(self.config.kernelSize)
         else:
-            actualKernelSize = 2 * int(self.config.kernelSize * numpy.sqrt(numpy.median(sizes)) + 0.5) + 1
+            actualKernelSize = 2 * int(self.config.kernelSize * np.sqrt(np.median(sizes)) + 0.5) + 1
             if actualKernelSize < self.config.kernelSizeMin:
                 actualKernelSize = self.config.kernelSizeMin
             if actualKernelSize > self.config.kernelSizeMax:
                 actualKernelSize = self.config.kernelSizeMax
             if display:
-                print "Median size=%s" % (numpy.median(sizes),)
+                print "Median size=%s" % (np.median(sizes),)
         self.debugLog.debug(3, "Kernel size=%s" % (actualKernelSize,))
 
-        # Set size of image returned around candidate
-        psfCandidateList[0].setHeight(actualKernelSize)
-        psfCandidateList[0].setWidth(actualKernelSize)
+        #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- BEGIN PSFEX
+        #
+        # Insert the good candidates into the set
+        #
+        defaultsFile = os.path.join(os.environ["PSFEX_DIR"], "config", "default-lsst.psfex")
+        args_md = dafBase.PropertySet()
+        prefs = psfex.Prefs(defaultsFile, args_md)
+        prefs.setCommandLine([])
+        prefs.addCatalog("psfexPsfDeterminer")
+
+        prefs.use()
+
+        context = psfex.Context(prefs.getContextName(), prefs.getContextGroup(),
+                                prefs.getGroupDeg(),
+                                psfex.Context.REMOVEHIDDEN if False else psfex.Context.KEEPHIDDEN)
+	set = psfex.Set(context)
+        set.setVigSize(actualKernelSize, actualKernelSize)
+        set.setFwhm(2*np.sqrt(2*np.log(2))*np.median(sizes))
+
+        catindex, ext = 0, 0
+        backnoise2 = afwMath.makeStatistics(mi.getImage(), afwMath.VARIANCECLIP).getValue()
+        gain = 1.0
+        self.warnLog.log(pexLog.Log.WARN, "Setting gain to %g" % gain)
+
+        contextvalp = []
+        for i, key in enumerate(context.getName()):
+            if context.getPcflag(i):
+                contextvalp.append(pcval[pc])
+                pc += 1
+            elif key[0] == ':':
+                try:
+                    contextvalp.append(exposure.getMetadata().get(key[1:]))
+                except KeyError:
+                    raise RuntimeError("*Error*: %s parameter not found in the header of %s" %
+                                       (key[1:], filename))
+            else:
+                try:
+                    contextvalp.append(np.array([psfCandidateList[_].getSource().get(key)
+                                                    for _ in range(nCand)]))
+                except KeyError:
+                    raise RuntimeError("*Error*: %s parameter not found" % (key))
+                set.setContextname(i, key)
 
         if display:
             frame = 0
             if displayExposure:
                 ds9.mtv(exposure, frame=frame, title="psf determination")
-                maUtils.showPsfSpatialCells(exposure, psfCellSet, self.config.nStarPerCell,
-                                            symb="o", ctype=ds9.CYAN, ctypeUnused=ds9.YELLOW,
-                                            size=4, frame=frame)
             
+        with ds9.Buffering():
+            xpos, ypos = [], []
+            for i, psfCandidate in enumerate(psfCandidateList):
+                source = psfCandidate.getSource()
+
+                sample = set.newSample()
+                sample.setCatindex(catindex)
+                sample.setExtindex(ext)
+
+                xc, yc = source.getX(), source.getY()
+                try:
+                    x, y = int(xc), int(yc)
+                except ValueError:
+                    continue
+
+                try:
+                    pstamp = mi[x - actualKernelSize//2:x + actualKernelSize//2 + 1,
+                                y - actualKernelSize//2:y + actualKernelSize//2 + 1]
+                    sample.setVig(pstamp.getImage().getArray().copy())
+                except Exception, e:
+                    print e
+                    import pdb; pdb.set_trace() 
+                    continue
+
+                if False:
+                    pstamp.getImage().getArray()[:] = sample.getVig()
+
+                    ds9.mtv(pstamp)
+
+                sample.setNorm(source.get(prefs.getPhotfluxRkey()))
+                sample.setBacknoise2(backnoise2)
+                sample.setGain(gain)
+                sample.setX(xc)
+                sample.setY(float(yc))
+                sample.setFluxrad(sizes[i])
+
+                for j in range(set.getNcontext()):
+                    sample.setContext(j, float(contextvalp[j][i]))
+
+                set.finiSample(sample, prefs.getProfAccuracy())
+
+                if flagKey is not None:
+                    source.set(flagKey, True)
+
+                xpos.append(xc); ypos.append(yc) # for QA
+
+            if displayExposure:
+                ds9.dot("o", xc, yc, ctype=ds9.CYAN, size=4, frame=frame)
+
+        #---- Update min and max and then the scaling
+        for i in range(set.getNcontext()):
+            cmin = contextvalp[i].min()
+            cmax = contextvalp[i].max()
+            set.setContextScale(i, cmax - cmin)
+            set.setContextOffset(i, (cmin + cmax)/2.0)
+
+        # Don't waste memory!
+        set.trimMemory()
+
+        #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- END PSFEX 
         #
         # Do a PSFEX decomposition of those PSF candidates
         #
-        size = actualKernelSize + 2*self.config.borderWidth
-        nu = size*size - 1                  # number of degrees of freedom/star for chi^2    
-    
-        reply = "y"                         # used in interactive mode
-        for iter in range(self.config.nIterForPsf):
-            if display and displayPsfCandidates: # Show a mosaic of usable PSF candidates
-                #
-                import lsst.afw.display.utils as displayUtils
+        fields = psfex.vectorField()
+        field = psfex.Field("Unknown")
+        field.addExt(exposure.getWcs(), exposure.getWidth(), exposure.getHeight(), set.getNsample())
+        field.finalize()
 
-                stamps = []
-                for cell in psfCellSet.getCellList():
-                    for cand in cell.begin(not showBadCandidates): # maybe include bad candidates
-                        cand = measAlg.cast_PsfCandidateF(cand)
+        fields.append(field)
 
-                        try:
-                            im = cand.getMaskedImage()
+        sets = psfex.vectorSet()
+        sets.append(set)
 
-                            chi2 = cand.getChi2()
-                            if chi2 > 1e100:
-                                chi2 = numpy.nan
+        psfex.makeit(fields, sets)
+        psfs = field.getPsfs()
+        psf = psfs[0]
 
-                            stamps.append((im, "%d%s" %
-                                           (maUtils.splitId(cand.getSource().getId(), True)["objId"], chi2Str),
-                                           cand.getStatus()))
-                        except Exception, e:
-                            continue
-
-                mos = displayUtils.Mosaic()
-                for im, label, status in stamps:
-                    im = type(im)(im, True)
-                    try:
-                        im /= afwMath.makeStatistics(im, afwMath.MAX).getValue()
-                    except NotImplementedError:
-                        pass
-
-                    mos.append(im, label,
-                               ds9.GREEN if status == afwMath.SpatialCellCandidate.GOOD else
-                               ds9.YELLOW if status == afwMath.SpatialCellCandidate.UNKNOWN else ds9.RED)
-
-
-                mos.makeMosaic(frame=8, title="Psf Candidates")
-
-            # Re-fit until we don't have any candidates with naughty chi^2 values influencing the fit
-            cleanChi2 = False # Any naughty (negative/NAN) chi^2 values?
-            while not cleanChi2:
-                cleanChi2 = True
-                #
-                # First, estimate the PSF
-                #
-                psf, eigenValues, nEigenComponents, fitChi2 = \
-                    self._fitPsf(exposure, psfCellSet, actualKernelSize, nEigenComponents)
-                #
-                # In clipping, allow all candidates to be innocent until proven guilty on this iteration.
-                # Throw out any prima facie guilty candidates (naughty chi^2 values)
-                # 
-                for cell in psfCellSet.getCellList():
-                    awfulCandidates = []
-                    for cand in cell.begin(False): # include bad candidates
-                        cand = measAlg.cast_PsfCandidateF(cand)
-                        cand.setStatus(afwMath.SpatialCellCandidate.UNKNOWN) # until proven guilty
-                        rchi2 = cand.getChi2()
-                        if not numpy.isfinite(rchi2) or rchi2 <= 0:
-                            # Guilty prima facie
-                            awfulCandidates.append(cand)
-                            cleanChi2 = False
-                            self.debugLog.debug(2, "chi^2=%s; id=%s" %
-                                                (cand.getChi2(), cand.getSource().getId()))
-                    for cand in awfulCandidates:
-                        if display:
-                            print "Removing bad candidate: id=%d, chi^2=%f" % \
-                                  (cand.getSource().getId(), cand.getChi2())
-                        cell.removeCandidate(cand)
-
-            #
-            # Clip out bad fits based on reduced chi^2
-            #
-            badCandidates = list()
-            for cell in psfCellSet.getCellList():
-                for cand in cell.begin(False): # include bad candidates
-                    cand = measAlg.cast_PsfCandidateF(cand)
-                    rchi2 = cand.getChi2()  # reduced chi^2 when fitting PSF to candidate
-                    assert rchi2 > 0
-                    if rchi2 > self.config.reducedChi2ForPsfCandidates:
-                        badCandidates.append(cand)
-
-            badCandidates.sort(key=lambda x: x.getChi2(), reverse=True)
-            numBad = int(len(badCandidates) * (iter + 1) / self.config.nIterForPsf + 0.5)
-            for i, c in zip(range(numBad), badCandidates):
-                if display:
-                    chi2 = c.getChi2()
-                    if chi2 > 1e100:
-                        chi2 = numpy.nan
-                    
-                    print "Chi^2 clipping %-4d  %.2g" % (c.getSource().getId(), chi2)
-                c.setStatus(afwMath.SpatialCellCandidate.BAD)
-
-            #
-            # Clip out bad fits based on spatial fitting.
-            #
-            # This appears to be better at getting rid of sources that have a single dominant kernel component
-            # (other than the zeroth; e.g., a nearby contaminant) because the surrounding sources (which help
-            # set the spatial model) don't contain that kernel component, and so the spatial modeling
-            # downweights the component.
-            #
-
-            residuals = list()
-            candidates = list()
-            kernel = psf.getKernel()
-            noSpatialKernel = afwMath.cast_LinearCombinationKernel(psf.getKernel())
-            for cell in psfCellSet.getCellList():
-                for cand in cell.begin(False):
-                    cand = measAlg.cast_PsfCandidateF(cand)
-                    candCenter = afwGeom.PointD(cand.getXCenter(), cand.getYCenter())
-                    try:
-                        im = cand.getMaskedImage(kernel.getWidth(), kernel.getHeight())
-                    except Exception, e:
-                        continue
-
-                    fit = measAlg.fitKernelParamsToImage(noSpatialKernel, im, candCenter)
-                    params = fit[0]
-                    kernels = fit[1]
-                    amp = 0.0
-                    for p, k in zip(params, kernels):
-                        amp += p * afwMath.cast_FixedKernel(k).getSum()
-
-                    predict = [kernel.getSpatialFunction(k)(candCenter.getX(), candCenter.getY()) for
-                               k in range(kernel.getNKernelParameters())]
-
-                    #print cand.getSource().getId(), [a / amp for a in params], predict
-
-                    residuals.append([a / amp - p for a, p in zip(params, predict)])
-                    candidates.append(cand)
-
-            residuals = numpy.array(residuals)
-
-            for k in range(kernel.getNKernelParameters()):
-                if False:
-                    # Straight standard deviation
-                    mean = residuals[:,k].mean()
-                    rms = residuals[:,k].std()
-                elif False:
-                    # Using interquartile range
-                    sr = numpy.sort(residuals[:,k])
-                    mean = sr[int(0.5*len(sr))] if len(sr) % 2 else \
-                           0.5 * (sr[int(0.5*len(sr))] + sr[int(0.5*len(sr))+1])
-                    rms = 0.74 * (sr[int(0.75*len(sr))] - sr[int(0.25*len(sr))])
-                else:
-                    stats = afwMath.makeStatistics(residuals[:,k], afwMath.MEANCLIP | afwMath.STDEVCLIP)
-                    mean = stats.getValue(afwMath.MEANCLIP)
-                    rms = stats.getValue(afwMath.STDEVCLIP)
-
-                rms = max(1.0e-4, rms)  # Don't trust RMS below this due to numerical issues
-
-                if display:
-                    print "Mean for component %d is %f" % (k, mean)
-                    print "RMS for component %d is %f" % (k, rms)
-                badCandidates = list()
-                for i, cand in enumerate(candidates):
-                    if numpy.fabs(residuals[i,k] - mean) > self.config.spatialReject * rms:
-                        badCandidates.append(i)
-
-                badCandidates.sort(key=lambda x: numpy.fabs(residuals[x,k] - mean), reverse=True)
-
-                numBad = int(len(badCandidates) * (iter + 1) / self.config.nIterForPsf + 0.5)
-
-                for i, c in zip(range(min(len(badCandidates), numBad)), badCandidates):
-                    cand = candidates[c]
-                    if display:
-                        print "Spatial clipping %d (%f,%f) based on %d: %f vs %f" % \
-                              (cand.getSource().getId(), cand.getXCenter(), cand.getYCenter(), k,
-                               residuals[badCandidates[i],k], self.config.spatialReject * rms)
-                    cand.setStatus(afwMath.SpatialCellCandidate.BAD)
-
-            #
-            # Display results
-            #
-            if display and displayIterations:
-                if displayExposure:
-                    if iter > 0:
-                        ds9.erase(frame=frame)
-                    maUtils.showPsfSpatialCells(exposure, psfCellSet, self.config.nStarPerCell, showChi2=True,
-                                                symb="o", size=8, frame=frame,
-                                                ctype=ds9.YELLOW, ctypeBad=ds9.RED, ctypeUnused=ds9.MAGENTA)
-                    if self.config.nStarPerCellSpatialFit != self.config.nStarPerCell:
-                        maUtils.showPsfSpatialCells(exposure, psfCellSet, self.config.nStarPerCellSpatialFit,
-                                                    symb="o", size=10, frame=frame,
-                                                    ctype=ds9.YELLOW, ctypeBad=ds9.RED)
-                if displayResiduals:
-                    while True:
-                        try:
-                            maUtils.showPsfCandidates(exposure, psfCellSet, psf=psf, frame=4,
-                                                      normalize=normalizeResiduals,
-                                                      showBadCandidates=showBadCandidates)
-                            maUtils.showPsfCandidates(exposure, psfCellSet, psf=psf, frame=5,
-                                                      normalize=normalizeResiduals,
-                                                      showBadCandidates=showBadCandidates,
-                                                      variance=True)
-                        except:
-                            if not showBadCandidates:
-                                showBadCandidates = True
-                                continue
-                        break
-
-                if displayPsfComponents:
-                    maUtils.showPsf(psf, eigenValues, frame=6)
-                if displayPsfMosaic:
-                    maUtils.showPsfMosaic(exposure, psf, frame=7, showFWHM=True)
-                    ds9.ds9Cmd(ds9.selectFrame(frame=7) + " ;scale limits 0 1")
-                if displayPsfSpatialModel:
-                    maUtils.plotPsfSpatialModel(exposure, psf, psfCellSet, showBadCandidates=True,
-                                                matchKernelAmplitudes=matchKernelAmplitudes,
-                                                keepPlots=keepMatplotlibPlots)
-
-                if pause:
-                    while True:
-                        try:
-                            reply = raw_input("Next iteration? [ynchpqQs] ").strip()
-                        except EOFError:
-                            reply = "n"
-
-                        reply = reply.split()
-                        if reply:
-                            reply, args = reply[0], reply[1:]
-                        else:
-                            reply = ""
-
-                        if reply in ("", "c", "h", "n", "p", "q", "Q", "s", "y"):
-                            if reply == "c":
-                                pause = False
-                            elif reply == "h":
-                                print "c[ontinue without prompting] h[elp] n[o] p[db] q[uit displaying] s[ave fileName] y[es]"
-                                continue
-                            elif reply == "p":
-                                import pdb; pdb.set_trace() 
-                            elif reply == "q":
-                                display = False
-                            elif reply == "Q":
-                                sys.exit(1)
-                            elif reply == "s":
-                                fileName = args.pop(0)
-                                if not fileName:
-                                    print "Please provide a filename"
-                                    continue
-
-                                print "Saving to %s" % fileName
-                                maUtils.saveSpatialCellSet(psfCellSet, fileName=fileName)
-                                continue
-                            break
-                        else:
-                            print >> sys.stderr, "Unrecognised response: %s" % reply
-
-                    if reply == "n":
-                        break
-
-        # One last time, to take advantage of the last iteration
-        psf, eigenValues, nEigenComponents, fitChi2 = \
-            self._fitPsf(exposure, psfCellSet, actualKernelSize, nEigenComponents)
-
+        ext = 0
+        frame = 0
+        diagnostics = True
+        catDir = "."
+        title = "psfexPsfDeterminer"
+        psfex.psfex.showPsf([psf], set, ext, [(exposure.getWcs(), exposure.getWidth(), exposure.getHeight())],
+                            nspot=3, trim=5, frame=frame, diagnostics=diagnostics, outDir=catDir, title=title)
         #
         # Display code for debugging
         #
-        if display and reply != "n":
+        if False and display and reply != "n":
             if displayExposure:
                 maUtils.showPsfSpatialCells(exposure, psfCellSet, self.config.nStarPerCell, showChi2=True,
                                             symb="o", ctype=ds9.YELLOW, ctypeBad=ds9.RED, size=8, frame=frame)
@@ -542,8 +356,9 @@ class PsfexPsfDeterminer(object):
                                               normalize=normalizeResiduals,
                                               showBadCandidates=showBadCandidates)
 
-            if displayPsfComponents:
-                maUtils.showPsf(psf, eigenValues, frame=6)
+            if OLD:
+                if displayPsfComponents:
+                    maUtils.showPsf(psf, eigenValues, frame=6)
 
             if displayPsfMosaic:
                 maUtils.showPsfMosaic(exposure, psf, frame=7, showFWHM=True)
@@ -557,38 +372,33 @@ class PsfexPsfDeterminer(object):
         #
         # Count PSF stars
         #
-        numGoodStars = 0
-        numAvailStars = 0
-
-        avgX = 0.0
-        avgY = 0.0
-
-        for cell in psfCellSet.getCellList():
-            for cand in cell.begin(False):  # don't ignore BAD stars
-                numAvailStars += 1
-
-            for cand in cell.begin(True):  # do ignore BAD stars
-                cand = measAlg.cast_PsfCandidateF(cand)
-                src = cand.getSource()
-                if flagKey is not None:
-                    src.set(flagKey, True)
-                avgX += src.getX()
-                avgY += src.getY()
-                numGoodStars += 1
-
-        avgX /= numGoodStars
-        avgY /= numGoodStars
+        xpos = np.array(xpos); ypos = np.array(ypos)
+        numGoodStars = len(xpos)
+        avgX, avgY = np.mean(xpos), np.mean(ypos)
 
         if metadata != None:
-            metadata.set("spatialFitChi2", fitChi2)
+            metadata.set("spatialFitChi2", np.nan)
+            metadata.set("numAvailStars", nCand)
             metadata.set("numGoodStars", numGoodStars)
-            metadata.set("numAvailStars", numAvailStars)
             metadata.set("avgX", avgX)
             metadata.set("avgY", avgY)
 
-        psf = psfex.PsfexPsf(psf.getKernel(), afwGeom.Point2D(avgX, avgY))
+        if False:
+            kern = psf.getKernel()
+        else:
+            psf.build(avgX, avgY)
 
-        return psf, psfCellSet
+            kim = afwImage.ImageD(*psf.getLoc().shape)
+            kim.getArray()[:] = psf.getLoc().astype('float64')
+
+            kernelList = afwMath.KernelList()
+            kernelList.append(afwMath.FixedKernel(kim))
+
+            kern = afwMath.LinearCombinationKernel(kernelList, [1])
+
+        psf = psfex.PsfexPsf(kern, afwGeom.Point2D(avgX, avgY))
+
+        return psf, None
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-    
 
