@@ -256,7 +256,6 @@ class PsfexStarSelector(object):
         ixy = catalog.get("%s.xy" % shape)
 
         fwhm = 2*np.sqrt(2*np.log(2))*np.sqrt(0.5*(ixx + iyy))
-        fwhm = 2*np.sqrt(2*np.log(2))*(ixx*iyy - ixy**2)**0.25
         elong = 0.5*(ixx - iyy)/(ixx + iyy)
 
         flux = catalog.get(fluxName)
