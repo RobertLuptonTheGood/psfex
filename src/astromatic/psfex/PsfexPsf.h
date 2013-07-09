@@ -24,7 +24,8 @@
 #ifndef LSST_MEAS_ALGORITHMS_PsfexPsf_h_INCLUDED
 #define LSST_MEAS_ALGORITHMS_PsfexPsf_h_INCLUDED
 
-#include "lsst/meas/algorithms/KernelPsf.h"
+#include "lsst/meas/algorithms/ImagePsf.h"
+#include "psf.hh"
 
 namespace astromatic { namespace psfex {
 
@@ -32,33 +33,40 @@ namespace astromatic { namespace psfex {
  * @brief Represent a PSF as a linear combination of PSFEX (== Karhunen-Loeve) basis functions
  */
 class PsfexPsf : public lsst::afw::table::io::PersistableFacade<PsfexPsf>,
-                 public lsst::meas::algorithms::KernelPsf {
+                 public lsst::meas::algorithms::ImagePsf {
 public:
-
     /**
      *  @brief Constructor for a PsfexPsf
-     *
-     *  @param[in] kernel           Kernel that defines the Psf.
-     *  @param[in] averagePosition  Average position of stars used to construct the Psf.
      */
     explicit PsfexPsf(
-        PTR(lsst::afw::math::LinearCombinationKernel) kernel,
+        astromatic::psfex::Psf const& psf, ///< [in] Psfex PSF model that we want to wrap into an LSST Psf
         lsst::afw::geom::Point2D const & averagePosition=lsst::afw::geom::Point2D()
+                                        ///< [in] Average position of stars used to construct the Psf.
     );
+    virtual ~PsfexPsf();
 
     /// Polymorphic deep copy; should usually be unnecessary as Psfs are immutable.x
     virtual PTR(lsst::afw::detection::Psf) clone() const;
 
-    /// PsfexPsf always has a LinearCombinationKernel, so we can override getKernel to make it more useful.
-    PTR(lsst::afw::math::LinearCombinationKernel const) getKernel() const;
-
 private:
+    lsst::afw::geom::Point2D const & _averagePosition;
+    // Here are the unpacked fields from the psfex psf struct
+    struct poly *_poly;                 // Polynom describing the PSF variations
+    float _pixstep;                     // Mask oversampling (pixel)
+    std::vector<int> _size;             // PSF dimensions
+    std::vector<float> _comp;           // Complete pix. data (PSF components)
+    std::vector<std::pair<double, double> > _context; // Offset/scale to apply to context data
+
+    virtual PTR(lsst::afw::detection::Psf::Image) doComputeKernelImage(
+        lsst::afw::geom::Point2D const & position,
+        lsst::afw::image::Color const & color
+    ) const;
 
     // Name used in table persistence; the rest of is implemented by KernelPsf.
     virtual std::string getPersistenceName() const;
 
     virtual std::string getPythonModule() const;
-
+#if 0
     friend class boost::serialization::access;
 
     template <class Archive>
@@ -66,11 +74,12 @@ private:
         boost::serialization::void_cast_register<PsfexPsf,
             lsst::afw::detection::Psf>(static_cast<PsfexPsf*>(0), static_cast<lsst::afw::detection::Psf*>(0));
     }
-
+#endif
 };
 
 }}
 
+#if 0
 namespace boost {
 namespace serialization {
 
@@ -99,5 +108,6 @@ inline void load_construct_data(
 }
 
 }} // namespace boost::serialization
+#endif
 
 #endif // !LSST_MEAS_ALGORITHMS_PsfexPsf_h_INCLUDED

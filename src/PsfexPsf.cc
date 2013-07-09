@@ -28,6 +28,7 @@
  * @file
  */
 #include <cmath>
+#include <cassert>
 
 #include "boost/make_shared.hpp"
 
@@ -46,29 +47,88 @@ namespace psfex {
 namespace afw = lsst::afw;
 
 PsfexPsf::PsfexPsf(
-    PTR(afw::math::LinearCombinationKernel) kernel,
+    astromatic::psfex::Psf const& psf,
     afw::geom::Point2D const & averagePosition
-) : KernelPsf(kernel, averagePosition)
+                  ) : ImagePsf(), _averagePosition(averagePosition),
+                      _size(psf.impl->dim),
+                      _comp(psf.impl->npix),
+                      _context(psf.impl->poly->ndim)
+                      
 {
-    if (!kernel) {
-        throw LSST_EXCEPT(lsst::pex::exceptions::InvalidParameterException, "PsfexPsf kernel must not be null");
+    _poly = poly_copy(psf.impl->poly);
+
+    _pixstep = psf.impl->pixstep;
+
+    std::copy(psf.impl->size, psf.impl->size + psf.impl->dim, _size.begin());
+
+    std::copy(psf.impl->comp, psf.impl->comp + psf.impl->npix, _comp.begin());
+
+    for (int i = 0; i != psf.impl->poly->ndim; ++i) {
+        _context[i].first = psf.impl->contextoffset[i];
+        _context[i].second = psf.impl->contextscale[i];
     }
 }
 
-PTR(afw::math::LinearCombinationKernel const) PsfexPsf::getKernel() const {
-    return boost::static_pointer_cast<afw::math::LinearCombinationKernel const>(
-        KernelPsf::getKernel()
-    );
+PsfexPsf::~PsfexPsf()
+{
+    poly_end(_poly);
 }
 
-PTR(afw::detection::Psf) PsfexPsf::clone() const {
+PTR(afw::detection::Psf)
+PsfexPsf::clone() const {
     return boost::make_shared<PsfexPsf>(*this);
 }
 
-std::string PsfexPsf::getPersistenceName() const { return "PsfexPsf"; }
+std::string
+PsfexPsf::getPersistenceName() const { return "PsfexPsf"; }
 
-std::string PsfexPsf::getPythonModule() const { return "astromatic.psfex"; }
+std::string
+PsfexPsf::getPythonModule() const { return "astromatic.psfex"; }
 
+PTR(lsst::afw::detection::Psf::Image)
+PsfexPsf::doComputeKernelImage(lsst::afw::geom::Point<double, 2> const& position,
+                               lsst::afw::image::Color const&) const
+{
+    double pos[MAXCONTEXT];
+    int const ndim = _context.size();
+    if (ndim != 2) {                    // we're only handling spatial variation for now
+        throw LSST_EXCEPT(lsst::pex::exceptions::InvalidParameterException,
+                          str(boost::format("Only spatial variation (ndim == 2) is supported; saw %d")
+                              % ndim));
+
+    }
+
+    for (int i = 0; i < ndim; ++i) {
+        pos[i] = (position[i] - _context[i].first)/_context[i].second;
+    }
+
+    poly_func(_poly, pos);
+    double const *basis = _poly->basis;
+
+    int const w = _size[0], h = _size[1];
+    PTR(lsst::afw::detection::Psf::Image) im = boost::make_shared<lsst::afw::detection::Psf::Image>(w, h);
+    im->setXY0(-w/2, -h/2);
+
+    typedef lsst::afw::detection::Psf::Pixel PixelT;
+    PixelT *start = reinterpret_cast<PixelT *>(im->row_begin(0));
+    // the data should be contiguous as we just allocated it, but let's check
+    assert(reinterpret_cast<PixelT *>(im->row_begin(1)) - start == w);
+
+    float const *ppc = &_comp[0];
+    /* Sum each component */
+    int const npix = w*h;
+    for (int n = (_size.size() > 2 ? _size[2] : 1); n--;) {
+        PixelT *pl = start;
+        float const fac = (float)*(basis++);
+        for (int p = npix; p--;) {
+            *pl++ +=  fac*(*ppc++);
+        }
+    }
+
+    return im;
+}
+        
+#if 0
 namespace {
 
 // registration for table persistence
@@ -76,6 +136,7 @@ lsst::meas::algorithms::KernelPsfFactory<PsfexPsf,
                                          afw::math::LinearCombinationKernel> registration("psfexPsf");
 
 } // anonymous
+#endif
 
 }} // namespace astromatic::psfex
 
@@ -89,5 +150,5 @@ PsfFormatter::psfexPsfRegistration = daf::persistence::FormatterRegistration(
 );
 
 }}} // namespace lsst::afw::detection
-#endif
 BOOST_CLASS_EXPORT_GUID(astromatic::psfex::PsfexPsf, "astromatic::psfex::PsfexPsf")
+#endif

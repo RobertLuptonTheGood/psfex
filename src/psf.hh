@@ -150,6 +150,7 @@ private:
 /** \brief PSF
  */
 class Psf {
+    friend class PsfexPsf;
 public:
     Psf() : impl(0), _owner(boost::shared_ptr<fieldstruct>()) {}
     Psf(psfstruct *psf, boost::shared_ptr<fieldstruct> owner) : impl(psf), _owner(owner) {}
@@ -171,8 +172,9 @@ public:
 	psf_clip(impl);
     }
     
-private:
+protected:
     psfstruct *impl;
+private:
     boost::shared_ptr<fieldstruct> _owner;
 };
 

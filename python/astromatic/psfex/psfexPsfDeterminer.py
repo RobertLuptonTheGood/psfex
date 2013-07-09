@@ -165,19 +165,14 @@ class PsfexPsfDeterminer(object):
             lsstDebug.Info(__name__).displayPsfCandidates # show the viable candidates 
         if OLD:
             displayPsfComponents = lsstDebug.Info(__name__).displayPsfComponents # show the PSFEX components
-        displayResiduals = lsstDebug.Info(__name__).displayResiduals         # show residuals
-        displayPsfMosaic = lsstDebug.Info(__name__).displayPsfMosaic   # show mosaic of reconstructed PSF(x,y)
+        displayResiduals = display and \
+            lsstDebug.Info(__name__).displayResiduals         # show residuals
+        displayPsfMosaic = display and \
+            lsstDebug.Info(__name__).displayPsfMosaic   # show mosaic of reconstructed PSF(x,y)
         matchKernelAmplitudes = lsstDebug.Info(__name__).matchKernelAmplitudes # match Kernel amplitudes for spatial plots
-        if OLD:
-            keepMatplotlibPlots = lsstDebug.Info(__name__).keepMatplotlibPlots # Keep matplotlib alive post mortem
-            displayPsfSpatialModel = lsstDebug.Info(__name__).displayPsfSpatialModel # Plot spatial model?
         if OLD:
             showBadCandidates = lsstDebug.Info(__name__).showBadCandidates # Include bad candidates 
         normalizeResiduals = lsstDebug.Info(__name__).normalizeResiduals # Normalise residuals by object amplitude 
-        #pause = lsstDebug.Info(__name__).pause                         # Prompt user after each iteration?
-         
-        if display > 1:
-            pause = True
 
         mi = exposure.getMaskedImage()
         
@@ -333,13 +328,16 @@ class PsfexPsfDeterminer(object):
         psfs = field.getPsfs()
         psf = psfs[0]
 
-        ext = 0
-        frame = 0
-        diagnostics = True
-        catDir = "."
-        title = "psfexPsfDeterminer"
-        psfex.psfex.showPsf([psf], set, ext, [(exposure.getWcs(), exposure.getWidth(), exposure.getHeight())],
-                            nspot=3, trim=5, frame=frame, diagnostics=diagnostics, outDir=catDir, title=title)
+        if displayResiduals or displayPsfMosaic:
+            ext = 0
+            frame = 0
+            diagnostics = True
+            catDir = "."
+            title = "psfexPsfDeterminer"
+            psfex.psfex.showPsf([psf], set, ext,
+                                [(exposure.getWcs(), exposure.getWidth(), exposure.getHeight())],
+                                nspot=3, trim=5, frame=frame, diagnostics=diagnostics, outDir=catDir,
+                                title=title)
         #
         # Display code for debugging
         #
@@ -383,22 +381,10 @@ class PsfexPsfDeterminer(object):
             metadata.set("avgX", avgX)
             metadata.set("avgY", avgY)
 
-        if False:
-            kern = psf.getKernel()
-        else:
-            psf.build(avgX, avgY)
-
-            kim = afwImage.ImageD(*psf.getLoc().shape)
-            kim.getArray()[:] = psf.getLoc().astype('float64')
-
-            kernelList = afwMath.KernelList()
-            kernelList.append(afwMath.FixedKernel(kim))
-
-            kern = afwMath.LinearCombinationKernel(kernelList, [1])
-
-        psf = psfex.PsfexPsf(kern, afwGeom.Point2D(avgX, avgY))
-
-        return psf, None
+        psfexPsf = psfex.PsfexPsf(psf, afwGeom.Point2D(avgX, avgY))
+        psfCellSet = None
+        
+        return psfexPsf, psfCellSet
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-    
 

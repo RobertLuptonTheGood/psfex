@@ -11,7 +11,7 @@ if __name__ == "__main__":
 
     parser.add_argument('catalogs', type=str, nargs="+", help="Input catalogues from SExtractor")
     parser.add_argument('-c', type=str, dest="defaultsFile",
-                        help="File containing default parameters", default="default.psfex")
+                        help="File containing default parameters", default="default-lsst.psfex")
     parser.add_argument('--lsst', action="store_true", help="Read LSST data")
     parser.add_argument('--overrides', type=str, nargs="+",
                         help="Overrides for default parameters", default=[])
