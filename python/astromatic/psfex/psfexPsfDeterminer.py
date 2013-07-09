@@ -40,36 +40,31 @@ import lsst.meas.algorithms.psfDeterminerRegistry as psfDeterminerRegistry
 import astromatic.psfex as psfex
 
 class PsfexPsfDeterminerConfig(pexConfig.Config):
-    nonLinearSpatialFit = pexConfig.Field(
-        doc = "Use non-linear fitter for spatial variation of Kernel",
-        dtype = bool,
-        default = False,
-    )
-    nEigenComponents = pexConfig.Field(
+    __nEigenComponents = pexConfig.Field(
         doc = "number of eigen components for PSF kernel creation",
         dtype = int,
         default = 4,
     )
-    spatialOrder = pexConfig.Field(
+    __spatialOrder = pexConfig.Field(
         doc = "specify spatial order for PSF kernel creation",
         dtype = int,
         default = 2,
     )
-    sizeCellX = pexConfig.Field(
+    __sizeCellX = pexConfig.Field(
         doc = "size of cell used to determine PSF (pixels, column direction)",
         dtype = int,
         default = 256,
 #        minValue = 10,
         check = lambda x: x >= 10,
     )
-    sizeCellY = pexConfig.Field(
+    __sizeCellY = pexConfig.Field(
         doc = "size of cell used to determine PSF (pixels, row direction)",
         dtype = int,
-        default = sizeCellX.default,
+        default = __sizeCellX.default,
 #        minValue = 10,
         check = lambda x: x >= 10,
     )
-    nStarPerCell = pexConfig.Field(
+    __nStarPerCell = pexConfig.Field(
         doc = "number of stars per psf cell for PSF kernel creation",
         dtype = int,
         default = 3,
@@ -89,22 +84,22 @@ class PsfexPsfDeterminerConfig(pexConfig.Config):
         dtype = int,
         default = 45,
     )
-    borderWidth = pexConfig.Field(
+    __borderWidth = pexConfig.Field(
         doc = "Number of pixels to ignore around the edge of PSF candidate postage stamps",
         dtype = int,
         default = 0,
     )
-    nStarPerCellSpatialFit = pexConfig.Field(
+    __nStarPerCellSpatialFit = pexConfig.Field(
         doc = "number of stars per psf Cell for spatial fitting",
         dtype = int,
         default = 5,
     )
-    constantWeight = pexConfig.Field(
+    __constantWeight = pexConfig.Field(
         doc = "Should each PSF candidate be given the same weight, independent of magnitude?",
         dtype = bool,
         default = True,
     )
-    nIterForPsf = pexConfig.Field(
+    __nIterForPsf = pexConfig.Field(
         doc = "number of iterations of PSF candidate star list",
         dtype = int,
         default = 3,
@@ -326,11 +321,16 @@ class PsfexPsfDeterminer(object):
 
         psfex.makeit(fields, sets)
         psfs = field.getPsfs()
-        psf = psfs[0]
 
-        if displayResiduals or displayPsfMosaic:
+        xpos = np.array(xpos); ypos = np.array(ypos)
+        numGoodStars = len(xpos)
+        avgX, avgY = np.mean(xpos), np.mean(ypos)
+
+        psf = psfex.PsfexPsf(psfs[0], afwGeom.Point2D(avgX, avgY))
+
+        if False and displayResiduals or displayPsfMosaic:
             ext = 0
-            frame = 0
+            frame = 1
             diagnostics = True
             catDir = "."
             title = "psfexPsfDeterminer"
@@ -341,12 +341,12 @@ class PsfexPsfDeterminer(object):
         #
         # Display code for debugging
         #
-        if False and display and reply != "n":
-            if displayExposure:
-                maUtils.showPsfSpatialCells(exposure, psfCellSet, self.config.nStarPerCell, showChi2=True,
+        if display and reply != "n":
+            if False and displayExposure:
+                maUtils.showPsfSpatialCells(exposure, psfCellSet, self.config.__nStarPerCell, showChi2=True,
                                             symb="o", ctype=ds9.YELLOW, ctypeBad=ds9.RED, size=8, frame=frame)
-                if self.config.nStarPerCellSpatialFit != self.config.nStarPerCell:
-                    maUtils.showPsfSpatialCells(exposure, psfCellSet, self.config.nStarPerCellSpatialFit,
+                if self.config.__nStarPerCellSpatialFit != self.config.__nStarPerCell:
+                    maUtils.showPsfSpatialCells(exposure, psfCellSet, self.config.__nStarPerCellSpatialFit,
                                                 symb="o", ctype=ds9.YELLOW, ctypeBad=ds9.RED,
                                                 size=10, frame=frame)
                 if displayResiduals:
@@ -361,7 +361,7 @@ class PsfexPsfDeterminer(object):
             if displayPsfMosaic:
                 maUtils.showPsfMosaic(exposure, psf, frame=7, showFWHM=True)
                 ds9.ds9Cmd(ds9.selectFrame(frame=7) + " ;scale limits 0 1")
-            if displayPsfSpatialModel:
+            if False and displayPsfSpatialModel:
                 maUtils.plotPsfSpatialModel(exposure, psf, psfCellSet, showBadCandidates=True,
                                             matchKernelAmplitudes=matchKernelAmplitudes,
                                             keepPlots=keepMatplotlibPlots)
@@ -370,10 +370,6 @@ class PsfexPsfDeterminer(object):
         #
         # Count PSF stars
         #
-        xpos = np.array(xpos); ypos = np.array(ypos)
-        numGoodStars = len(xpos)
-        avgX, avgY = np.mean(xpos), np.mean(ypos)
-
         if metadata != None:
             metadata.set("spatialFitChi2", np.nan)
             metadata.set("numAvailStars", nCand)
@@ -381,10 +377,8 @@ class PsfexPsfDeterminer(object):
             metadata.set("avgX", avgX)
             metadata.set("avgY", avgY)
 
-        psfexPsf = psfex.PsfexPsf(psf, afwGeom.Point2D(avgX, avgY))
         psfCellSet = None
-        
-        return psfexPsf, psfCellSet
+        return psf, psfCellSet
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-    
 
