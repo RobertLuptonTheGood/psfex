@@ -21,8 +21,8 @@
  * see <http://www.lsstcorp.org/LegalNotices/>.
  */
 
-#ifndef LSST_MEAS_ALGORITHMS_PsfexPsf_h_INCLUDED
-#define LSST_MEAS_ALGORITHMS_PsfexPsf_h_INCLUDED
+#ifndef ASTROMATIC_PSFEX_PSFEX_H
+#define ASTROMATIC_PSFEX_PSFEX_H
 
 #include "lsst/meas/algorithms/ImagePsf.h"
 #include "psf.hh"
@@ -79,48 +79,8 @@ private:
     virtual std::string getPersistenceName() const;
 
     virtual std::string getPythonModule() const;
-#if 0
-    friend class boost::serialization::access;
-
-    template <class Archive>
-    void serialize(Archive&, unsigned int const) {
-        boost::serialization::void_cast_register<PsfexPsf,
-            lsst::afw::detection::Psf>(static_cast<PsfexPsf*>(0), static_cast<lsst::afw::detection::Psf*>(0));
-    }
-#endif
 };
 
 }}
 
-#if 0
-namespace boost {
-namespace serialization {
-
-template <class Archive>
-inline void save_construct_data(
-    Archive& ar, astromatic::psfex::PsfexPsf const* p,
-    unsigned int const) {
-    lsst::afw::math::LinearCombinationKernel const* kernel = p->getKernel().get();
-    ar << make_nvp("kernel", kernel);
-    lsst::afw::geom::Point2D averagePosition = p->getAveragePosition();
-    ar << make_nvp("averagePositionX", averagePosition.getX());
-    ar << make_nvp("averagePositionY", averagePosition.getY());
-}
-
-template <class Archive>
-inline void load_construct_data(
-    Archive& ar, astromatic::psfex::PsfexPsf* p,
-    unsigned int const) {
-    lsst::afw::math::LinearCombinationKernel* kernel;
-    ar >> make_nvp("kernel", kernel);
-    double x=0.0, y=0.0;
-    ar >> make_nvp("averagePositionX", x);
-    ar >> make_nvp("averagePositionY", y);
-    ::new(p) astromatic::psfex::PsfexPsf(PTR(lsst::afw::math::LinearCombinationKernel)(kernel),
-                                            lsst::afw::geom::Point2D(x, y));
-}
-
-}} // namespace boost::serialization
-#endif
-
-#endif // !LSST_MEAS_ALGORITHMS_PsfexPsf_h_INCLUDED
+#endif // !ASTROMATIC_PSFEX_PSFEX_H
