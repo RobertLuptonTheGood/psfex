@@ -28,12 +28,16 @@
 #include "psf.hh"
 
 namespace astromatic { namespace psfex {
+    namespace detail {
+        class PsfexPsfFactory;
+    }
 
 /**
  * @brief Represent a PSF as a linear combination of PSFEX (== Karhunen-Loeve) basis functions
  */
 class PsfexPsf : public lsst::afw::table::io::PersistableFacade<PsfexPsf>,
                  public lsst::meas::algorithms::ImagePsf {
+    friend class detail::PsfexPsfFactory;
 public:
     /**
      *  @brief Constructor for a PsfexPsf
@@ -48,14 +52,23 @@ public:
     /// Polymorphic deep copy; should usually be unnecessary as Psfs are immutable.x
     virtual PTR(lsst::afw::detection::Psf) clone() const;
 
+    /// Return average position of stars; used as default position.
+    virtual lsst::afw::geom::Point2D getAveragePosition() const { return _averagePosition; }
+    
+    /// Is this object persistable?
+    virtual bool isPersistable() const { return true; }
+    
+    void write(lsst::afw::table::io::OutputArchiveHandle & handle) const;
 private:
-    lsst::afw::geom::Point2D const & _averagePosition;
+    lsst::afw::geom::Point2D _averagePosition;
     // Here are the unpacked fields from the psfex psf struct
     struct poly *_poly;                 // Polynom describing the PSF variations
     float _pixstep;                     // Mask oversampling (pixel)
     std::vector<int> _size;             // PSF dimensions
     std::vector<float> _comp;           // Complete pix. data (PSF components)
     std::vector<std::pair<double, double> > _context; // Offset/scale to apply to context data
+
+    explicit PsfexPsf();
 
     virtual PTR(lsst::afw::detection::Psf::Image) doComputeKernelImage(
         lsst::afw::geom::Point2D const & position,
