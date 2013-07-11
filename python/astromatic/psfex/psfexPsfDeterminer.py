@@ -264,7 +264,7 @@ class PsfexPsfDeterminer(object):
                 try:
                     pstamp = mi[x - actualKernelSize//2:x + actualKernelSize//2 + 1,
                                 y - actualKernelSize//2:y + actualKernelSize//2 + 1]
-                    sample.setVig(pstamp.getImage().getArray().copy())
+                    sample.setVig(pstamp.getImage().getArray().transpose().copy())
                 except Exception, e:
                     print e
                     import pdb; pdb.set_trace() 

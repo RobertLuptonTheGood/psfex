@@ -782,7 +782,7 @@ def read_samplesLsst(prefs, set, filename, frmin, frmax, ext, next, catindex, co
 
         try:
             pstamp = mi[x - vigw//2:x + vigw//2 + 1, y - vigh//2:y + vigh//2 + 1]
-            vignet[i] = pstamp.getImage().getArray()
+            vignet[i] = pstamp.getImage().getArray().transpose()
         except Exception, e:
             flags[i] |= edgeBit         # mark star as bad
 
