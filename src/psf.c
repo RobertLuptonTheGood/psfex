@@ -80,10 +80,10 @@ double	psf_clean(psfstruct *psf, setstruct *set, double prof_accuracy)
   QMALLOC(chi, float, nsample);
   chit = chi;
   for (n=0; n<nsample; ++n)
-  {
-     sample = set->sample[n];
+    {
+    sample = set->sample[n];
     *(chit++) = (float)sqrt(sample->chi2);
-  }
+    }
 /* Produce k-sigma-clipped statistiscs */
   locut = -BIG;
   hicut = BIG;
