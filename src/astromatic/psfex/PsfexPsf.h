@@ -55,6 +55,12 @@ public:
     /// Return average position of stars; used as default position.
     virtual lsst::afw::geom::Point2D getAveragePosition() const { return _averagePosition; }
     
+    /// Return the PSF's basis functions as a spatially-invariant LinearCombinationKernel
+    /// with unit weights
+    PTR(lsst::afw::math::LinearCombinationKernel const)
+    getKernel(lsst::afw::geom::Point2D =
+              lsst::afw::geom::Point2D(std::numeric_limits<double>::quiet_NaN())) const;
+
     /// Is this object persistable?
     virtual bool isPersistable() const { return true; }
     
@@ -67,17 +73,33 @@ private:
     std::vector<int> _size;             // PSF dimensions
     std::vector<float> _comp;           // Complete pix. data (PSF components)
     std::vector<std::pair<double, double> > _context; // Offset/scale to apply to context data
+    mutable PTR(lsst::afw::math::LinearCombinationKernel) _kernel; // keep a reference to getKernel()'s kernel
 
+    /// default ctor; needed for persistence
     explicit PsfexPsf();
 
-    virtual PTR(lsst::afw::detection::Psf::Image) doComputeKernelImage(
-        lsst::afw::geom::Point2D const & position,
-        lsst::afw::image::Color const & color
+    /// Compute an image of the Psf at the specified position/colour, at pixel position in the output image
+    virtual PTR(lsst::afw::detection::Psf::Image) _doComputeImage(
+        lsst::afw::geom::Point2D const & position, ///< position within the chip
+        lsst::afw::image::Color const& color,      ///< colour of object
+        lsst::afw::geom::Point2D const& center     ///< position of center of image in the output image
     ) const;
 
-    // Name used in table persistence; the rest of is implemented by KernelPsf.
-    virtual std::string getPersistenceName() const;
+    /// Compute an image of the Psf at the specified position/colour, at pixel (0.0, 0.0) in the output image
+    virtual PTR(lsst::afw::detection::Psf::Image) doComputeKernelImage(
+        lsst::afw::geom::Point2D const & position, ///< position within the chip
+        lsst::afw::image::Color const& color       ///< colour of object
+    ) const;
 
+    /// Compute an image of the Psf at the specified position/colour, at pixel position in the output image
+    virtual PTR(lsst::afw::detection::Psf::Image) doComputeImage(
+        lsst::afw::geom::Point2D const & position, ///< position within the chip
+        lsst::afw::image::Color const& color       ///< colour of object
+    ) const;
+
+    /// Name used in table persistence
+    virtual std::string getPersistenceName() const;
+    /// The python module name (for use in table persistence)
     virtual std::string getPythonModule() const;
 };
 

@@ -33,12 +33,14 @@
 #include "boost/make_shared.hpp"
 
 #include "lsst/base.h"
+#include "lsst/utils/ieee.h"
 #include "lsst/pex/exceptions.h"
 #include "lsst/afw/image/ImageUtils.h"
 #include "lsst/afw/math/Statistics.h"
+extern "C" {
+#include "vignet.h"
+}
 #include "astromatic/psfex/PsfexPsf.h"
-#include "lsst/afw/formatters/KernelFormatter.h"
-#include "lsst/afw/detection/PsfFormatter.h"
 #include "lsst/meas/algorithms/KernelPsfFactory.h"
 
 namespace astromatic {
@@ -70,7 +72,7 @@ PsfexPsf::PsfexPsf(
 }
 
     PsfexPsf::PsfexPsf() : ImagePsf(),
-                           _averagePosition(lsst::afw::geom::Point2I(0, 0)),
+                           _averagePosition(afw::geom::Point2I(0, 0)),
                            _poly(0),
                            _pixstep(0.0),
                            _size(),
@@ -90,9 +92,90 @@ PsfexPsf::clone() const {
     return boost::make_shared<PsfexPsf>(*this);
 }
 
-PTR(lsst::afw::detection::Psf::Image)
-PsfexPsf::doComputeKernelImage(lsst::afw::geom::Point<double, 2> const& position,
-                               lsst::afw::image::Color const&) const
+PTR(afw::math::LinearCombinationKernel const)
+PsfexPsf::getKernel(afw::geom::Point2D position) const
+{
+    double pos[MAXCONTEXT];
+    int const ndim = _context.size();
+    if (ndim != 2) {                    // we're only handling spatial variation for now
+        throw LSST_EXCEPT(lsst::pex::exceptions::InvalidParameterException,
+                          str(boost::format("Only spatial variation (ndim == 2) is supported; saw %d")
+                              % ndim));
+
+    }
+    // where we want to evaluate the basis function's weights
+    if (!lsst::utils::isfinite(position[0])) {
+        position = _averagePosition;
+    }
+
+    for (int i = 0; i < ndim; ++i) {
+        pos[i] = (position[i] - _context[i].first)/_context[i].second;
+    }
+
+    poly_func(_poly, pos);              // evaluate polynomial
+
+    int const w = _size[0], h = _size[1];
+    std::vector<float> fullresIm(w*h);       // accumulate full-resolution image into this buffer
+    /*
+     * Create a fixed Kernel out of each component, and then create a LinearCombinationKernel from them
+     */
+    const int nbasis = _size.size() > 2 ? _size[2] : 1; // number of basis functions
+    afw::math::KernelList kernels; kernels.reserve(nbasis); // the insides of the LinearCombinationKernel
+    std::vector<double>   weights; weights.reserve(nbasis);
+
+    float const vigstep = 1/_pixstep;
+    float const dx = 0.0, dy = 0.0;
+    std::vector<float> sampledBasis(w*h);
+
+    afw::detection::Psf::Image kim(w, h); // a basis function image, to be copied into a FixedKernel
+    kim.setXY0(-w/2, -h/2);
+
+    for (int i = 0; i != nbasis; ++i) {
+        /*
+         * Resample the basis function onto the output resolution (and potentially subpixel offset)
+         */
+        vignet_resample(const_cast<float *>(&_comp[i*w*h]), w, h,
+                        &sampledBasis[0],                   w, h,
+                        -dy*vigstep, -dx*vigstep, vigstep, 1.0); // n.b. x and y are transposed
+        //
+        // And copy it into place
+        //
+        {
+            float *pl = &sampledBasis[0];
+            for (int y = 0; y != h; ++y) {
+                for (int x = 0; x != w; ++x) {
+                    kim(y, x) = *pl++;  // N.b.: (y, x) --- we're transposing the data
+                }
+            }
+        }
+
+        kernels.push_back(boost::make_shared<afw::math::FixedKernel>(kim));
+        weights.push_back(_poly->basis[i]);
+    }
+
+    _kernel = boost::make_shared<afw::math::LinearCombinationKernel>(kernels, weights);
+
+    return _kernel;
+}
+
+PTR(afw::detection::Psf::Image)
+PsfexPsf::doComputeImage(afw::geom::Point2D const & position,
+                         afw::image::Color const & color) const {
+    return _doComputeImage(position, color, position);
+}
+    
+PTR(afw::detection::Psf::Image)
+PsfexPsf::doComputeKernelImage(afw::geom::Point2D const& position,
+                               afw::image::Color const& color) const
+{
+    return _doComputeImage(position, color, afw::geom::Point2D(0, 0));
+}
+
+PTR(afw::detection::Psf::Image)
+PsfexPsf::_doComputeImage(afw::geom::Point2D const& position,
+                          afw::image::Color const&,
+                          afw::geom::Point2D const& center
+        ) const
 {
     double pos[MAXCONTEXT];
     int const ndim = _context.size();
@@ -107,26 +190,51 @@ PsfexPsf::doComputeKernelImage(lsst::afw::geom::Point<double, 2> const& position
         pos[i] = (position[i] - _context[i].first)/_context[i].second;
     }
 
-    poly_func(_poly, pos);
-    double const *basis = _poly->basis;
+    poly_func(_poly, pos);              // evaluate polynomial
 
     int const w = _size[0], h = _size[1];
-    PTR(lsst::afw::detection::Psf::Image) im = boost::make_shared<lsst::afw::detection::Psf::Image>(w, h);
-    im->setXY0(-w/2, -h/2);
+    std::vector<float> fullresIm(w*h);       // accumulate full-resolution image into this buffer
+    const int nbasis = _size.size() > 2 ? _size[2] : 1; // number of basis functions
 
-    typedef lsst::afw::detection::Psf::Pixel PixelT;
-    PixelT *start = reinterpret_cast<PixelT *>(im->row_begin(0));
-    // the data should be contiguous as we just allocated it, but let's check
-    assert(reinterpret_cast<PixelT *>(im->row_begin(1)) - start == w);
-
-    float const *ppc = &_comp[0];
     /* Sum each component */
     int const npix = w*h;
-    for (int n = (_size.size() > 2 ? _size[2] : 1); n--;) {
-        PixelT *pl = start;
-        float const fac = (float)*(basis++);
-        for (int p = npix; p--;) {
-            *pl++ +=  fac*(*ppc++);
+    for (int i = 0; i != nbasis; ++i) {
+        float *pl = &fullresIm[0];
+        float const fac = _poly->basis[i];
+        float const *ppc = &_comp[i*w*h];
+
+        for (int j = 0; j != npix; ++j) {
+            pl[j] +=  fac*ppc[j];
+        }
+    }
+    /*
+     * We now have the image reconstructed at internal resolution; resample it onto the output resolution
+     * and subpixel offset
+     */
+    float const vigstep = 1/_pixstep;
+    float dx = center[0] - static_cast<int>(center[0]);
+    float dy = center[1] - static_cast<int>(center[1]);
+    if (dx > 0.5) dx -= 1.0;
+    if (dy > 0.5) dy -= 1.0;
+    
+    std::vector<float> sampledIm(w*h);
+    vignet_resample(&fullresIm[0], w, h,
+                    &sampledIm[0], w, h,
+                    -dy*vigstep, -dx*vigstep, vigstep, 1.0); // n.b. x and y are transposed
+    //
+    // And copy it into place
+    //
+    PTR(afw::detection::Psf::Image) im = boost::make_shared<afw::detection::Psf::Image>(w, h);
+    // N.b. center[0] - dx == (int)center[] if we hadn't reduced dx to (-0.5, 0.5].
+    // The + 0.5 is to handle floating point imprecision in this calculation
+    im->setXY0(static_cast<int>(center[0] - dx - w/2 + 0.5),
+               static_cast<int>(center[1] - dy - h/2 + 0.5));
+    {
+        float *pl = &sampledIm[0];
+        for (int y = 0; y != h; ++y) {
+            for (int x = 0; x != w; ++x) {
+                (*im)(y, x) = *pl++;       // N.b.: (y, x) --- we're transposing the data
+            }
         }
     }
 
@@ -134,11 +242,10 @@ PsfexPsf::doComputeKernelImage(lsst::afw::geom::Point<double, 2> const& position
 }
 
 /************************************************************************************************************/
-   
-namespace table = lsst::afw::table;
-
-
-/************************************************************************************************************/
+/*
+ * All the rest of this file handles persistence to FITS files
+ */
+namespace table = afw::table;
 
 namespace {
 
@@ -318,13 +425,13 @@ std::string PsfexPsf::getPythonModule() const { return "astromatic.psfex"; }
 
 std::string PsfexPsf::getPersistenceName() const { return getPsfexPsfPersistenceName(); }
 
-void PsfexPsf::write(lsst::afw::table::io::OutputArchiveHandle & handle) const {
+void PsfexPsf::write(afw::table::io::OutputArchiveHandle & handle) const {
     // First write the dimensions of the various arrays to an HDU, so we can construct the second
     // HDU using them when we read the Psf back
     {
         PsfexPsfSchema1 const keys;
-        lsst::afw::table::BaseCatalog cat = handle.makeCatalog(keys.schema);
-        PTR(lsst::afw::table::BaseRecord) record = cat.addNew();
+        afw::table::BaseCatalog cat = handle.makeCatalog(keys.schema);
+        PTR(afw::table::BaseRecord) record = cat.addNew();
         
         // Sizes in _poly
         record->set(keys.ndim, _poly->ndim);
@@ -343,9 +450,9 @@ void PsfexPsf::write(lsst::afw::table::io::OutputArchiveHandle & handle) const {
     {
         PsfexPsfSchema2 const keys(_poly->ndim, _poly->ngroup, _poly->ncoeff,
                                    _size.size(), _comp.size(), _context.size());
-        lsst::afw::table::BaseCatalog cat = handle.makeCatalog(keys.schema);
+        afw::table::BaseCatalog cat = handle.makeCatalog(keys.schema);
         // _poly
-        PTR(lsst::afw::table::BaseRecord) record = cat.addNew();
+        PTR(afw::table::BaseRecord) record = cat.addNew();
         {
             int *begin = record->getElement(keys.group);
             std::copy(_poly->group, _poly->group + _poly->ndim, begin);
@@ -385,25 +492,3 @@ void PsfexPsf::write(lsst::afw::table::io::OutputArchiveHandle & handle) const {
 }
 
 }} // namespace astromatic::psfex
-
-/************************************************************************************************************/
-#if 0                                   // Boost persistence.  Not supported; sorry
-namespace {
-
-// registration for table persistence
-lsst::meas::algorithms::KernelPsfFactory<PsfexPsf,
-                                         afw::math::LinearCombinationKernel> registration("psfexPsf");
-
-} // anonymous
-
-namespace lsst { namespace afw { namespace detection {
-
-daf::persistence::FormatterRegistration
-PsfFormatter::psfexPsfRegistration = daf::persistence::FormatterRegistration(
-    "psfexPsf", typeid(astromatic::psfex::PsfexPsf),
-    lsst::afw::detection::PsfFormatter::createInstance
-);
-
-}}} // namespace lsst::afw::detection
-BOOST_CLASS_EXPORT_GUID(astromatic::psfex::PsfexPsf, "astromatic::psfex::PsfexPsf")
-#endif

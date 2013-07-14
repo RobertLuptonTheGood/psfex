@@ -50,17 +50,17 @@ class PsfexPsfDeterminerConfig(pexConfig.Config):
         dtype = int,
         default = 2,
     )
-    __sizeCellX = pexConfig.Field(
+    sizeCellX = pexConfig.Field(
         doc = "size of cell used to determine PSF (pixels, column direction)",
         dtype = int,
         default = 256,
 #        minValue = 10,
         check = lambda x: x >= 10,
     )
-    __sizeCellY = pexConfig.Field(
+    sizeCellY = pexConfig.Field(
         doc = "size of cell used to determine PSF (pixels, row direction)",
         dtype = int,
-        default = __sizeCellX.default,
+        default = sizeCellX.default,
 #        minValue = 10,
         check = lambda x: x >= 10,
     )
@@ -150,23 +150,21 @@ class PsfexPsfDeterminer(object):
     
         @return psf: an astromatic.psfex.PsfexPsf
         """
-        OLD = False                     # used to flag unconverted-but-maybe-useful pcaPsf code
-
         import lsstDebug
         display = lsstDebug.Info(__name__).display 
         displayExposure = display and \
             lsstDebug.Info(__name__).displayExposure     # display the Exposure + spatialCells 
         displayPsfCandidates = display and \
             lsstDebug.Info(__name__).displayPsfCandidates # show the viable candidates 
-        if OLD:
-            displayPsfComponents = lsstDebug.Info(__name__).displayPsfComponents # show the PSFEX components
+        displayPsfComponents = display and \
+            lsstDebug.Info(__name__).displayPsfComponents # show the basis functions
+        showBadCandidates = display and \
+            lsstDebug.Info(__name__).showBadCandidates # Include bad candidates (meaningless, methinks)
         displayResiduals = display and \
             lsstDebug.Info(__name__).displayResiduals         # show residuals
         displayPsfMosaic = display and \
             lsstDebug.Info(__name__).displayPsfMosaic   # show mosaic of reconstructed PSF(x,y)
         matchKernelAmplitudes = lsstDebug.Info(__name__).matchKernelAmplitudes # match Kernel amplitudes for spatial plots
-        if OLD:
-            showBadCandidates = lsstDebug.Info(__name__).showBadCandidates # Include bad candidates 
         normalizeResiduals = lsstDebug.Info(__name__).normalizeResiduals # Normalise residuals by object amplitude 
 
         mi = exposure.getMaskedImage()
@@ -177,8 +175,20 @@ class PsfexPsfDeterminer(object):
         #
         # How big should our PSF models be?
         #
+        if display:                     # only needed for debug plots
+            # construct and populate a spatial cell set
+            bbox = mi.getBBox(afwImage.PARENT)
+            psfCellSet = afwMath.SpatialCellSet(bbox, self.config.sizeCellX, self.config.sizeCellY)
+        
         sizes = np.empty(nCand)
         for i, psfCandidate in enumerate(psfCandidateList):
+            try:
+                if psfCellSet:
+                    psfCellSet.insertCandidate(psfCandidate)
+            except Exception, e:
+                self.debugLog.debug(2, "Skipping PSF candidate %d of %d: %s" % (i, len(psfCandidateList), e))
+                continue
+
             source = psfCandidate.getSource()
             quad = afwEll.Quadrupole(source.getIxx(), source.getIyy(), source.getIxy())
             rmsSize = quad.getTraceRadius()
@@ -195,8 +205,13 @@ class PsfexPsfDeterminer(object):
             if actualKernelSize > self.config.kernelSizeMax:
                 actualKernelSize = self.config.kernelSizeMax
             if display:
-                print "Median size=%s" % (np.median(sizes),)
+                rms = np.median(sizes)
+                print "Median PSF RMS size=%.2f pixels (\"FWHM\"=%.2f)" % (rms, 2*np.sqrt(2*np.log(2))*rms)
         self.debugLog.debug(3, "Kernel size=%s" % (actualKernelSize,))
+
+        # Set size of image returned around candidate
+        psfCandidateList[0].setHeight(actualKernelSize)
+        psfCandidateList[0].setWidth(actualKernelSize)
 
         #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- BEGIN PSFEX
         #
@@ -267,7 +282,6 @@ class PsfexPsfDeterminer(object):
                     sample.setVig(pstamp.getImage().getArray().transpose().copy())
                 except Exception, e:
                     print e
-                    import pdb; pdb.set_trace() 
                     continue
 
                 if False:
@@ -328,43 +342,34 @@ class PsfexPsfDeterminer(object):
 
         psf = psfex.PsfexPsf(psfs[0], afwGeom.Point2D(avgX, avgY))
 
-        if False and displayResiduals or displayPsfMosaic:
+        if False and (displayResiduals or displayPsfMosaic):
             ext = 0
             frame = 1
             diagnostics = True
             catDir = "."
             title = "psfexPsfDeterminer"
-            psfex.psfex.showPsf([psf], set, ext,
+            psfex.psfex.showPsf(psfs, set, ext,
                                 [(exposure.getWcs(), exposure.getWidth(), exposure.getHeight())],
                                 nspot=3, trim=5, frame=frame, diagnostics=diagnostics, outDir=catDir,
                                 title=title)
         #
         # Display code for debugging
         #
-        if display and reply != "n":
-            if False and displayExposure:
-                maUtils.showPsfSpatialCells(exposure, psfCellSet, self.config.__nStarPerCell, showChi2=True,
+        if display:
+            assert psfCellSet is not None
+
+            if displayExposure:
+                maUtils.showPsfSpatialCells(exposure, psfCellSet, showChi2=True,
                                             symb="o", ctype=ds9.YELLOW, ctypeBad=ds9.RED, size=8, frame=frame)
-                if self.config.__nStarPerCellSpatialFit != self.config.__nStarPerCell:
-                    maUtils.showPsfSpatialCells(exposure, psfCellSet, self.config.__nStarPerCellSpatialFit,
-                                                symb="o", ctype=ds9.YELLOW, ctypeBad=ds9.RED,
-                                                size=10, frame=frame)
-                if displayResiduals:
-                    maUtils.showPsfCandidates(exposure, psfCellSet, psf=psf, frame=4,
-                                              normalize=normalizeResiduals,
-                                              showBadCandidates=showBadCandidates)
-
-            if OLD:
-                if displayPsfComponents:
-                    maUtils.showPsf(psf, eigenValues, frame=6)
-
+            if displayResiduals:
+                maUtils.showPsfCandidates(exposure, psfCellSet, psf=psf, frame=4,
+                                          normalize=normalizeResiduals,
+                                          showBadCandidates=showBadCandidates)
+            if displayPsfComponents:
+                maUtils.showPsf(psf, frame=6)
             if displayPsfMosaic:
-                maUtils.showPsfMosaic(exposure, psf, frame=7, showFWHM=True)
+                maUtils.showPsfMosaic(exposure, psf, frame=7, showFwhm=True)
                 ds9.ds9Cmd(ds9.selectFrame(frame=7) + " ;scale limits 0 1")
-            if False and displayPsfSpatialModel:
-                maUtils.plotPsfSpatialModel(exposure, psf, psfCellSet, showBadCandidates=True,
-                                            matchKernelAmplitudes=matchKernelAmplitudes,
-                                            keepPlots=keepMatplotlibPlots)
         #
         # Generate some QA information
         #

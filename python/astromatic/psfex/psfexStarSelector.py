@@ -368,7 +368,7 @@ class PsfexStarSelector(object):
             plt.xlim(np.median(imag[good]) + 5*np.array([-1, 1]))
             plt.ylim(fwhm[np.where(np.isfinite(fwhm + imag))].min(), 2*fwhmMax)
             plt.legend(loc=2)
-            plt.xlabel("Instrumental Magnitude")
+            plt.xlabel("Instrumental %s Magnitude" % fluxName.split(".")[-1].title())
             plt.ylabel("fwhm")
             title = "PSFEX Star Selection"
             plt.title("%s %d selected" % (title, sum(good)))
