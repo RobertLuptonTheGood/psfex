@@ -1,6 +1,13 @@
 // -*- lsst-C++ -*-
 #include <cstring>
 #include "lsst/meas/extensions/psfex/Field.hh"
+#include "wcslib/wcs.h"
+#undef PI
+#include "lsst/afw/image/Wcs.h"
+
+extern "C" {
+    #include "globals.h"
+}
 
 namespace astromatic { namespace psfex {
 
@@ -60,7 +67,6 @@ Field::_finalize(bool force)
 }
 
 /************************************************************************************************************/
-
         
 std::vector<Psf>
 Field::getPsfs() const
@@ -74,5 +80,62 @@ Field::getPsfs() const
 
     return _psfs;
 }
+
+/************************************************************************************************************/
+//
+// This class exists solely so that I can recover the protected data member _wcsInfo
+//
+namespace {
+struct PsfUnpack : private lsst::afw::image::Wcs {
+    PsfUnpack(lsst::afw::image::Wcs const& wcs) : Wcs(wcs) { }
+    const struct wcsprm* getWcsInfo() { return _wcsInfo; }
+};
+}
+
+void
+Field::addExt(lsst::afw::image::Wcs const& wcs_,
+              int const naxis1, int const naxis2,
+              int const nobj)
+{
+    QREALLOC(impl->psf, psfstruct *, impl->next + 1);
+    impl->psf[impl->next] = 0;
+    QREALLOC(impl->wcs, wcsstruct *, impl->next + 1);
+    impl->wcs[impl->next] = 0;
+    /*
+     * We're going to fake psfex's wcsstruct object.  We only need enough of it for field_locate
+     */
+    PsfUnpack wcsUnpacked(wcs_);
+    struct wcsprm const* wcsPrm = wcsUnpacked.getWcsInfo();
+    QMALLOC(impl->wcs[impl->next], wcsstruct, 1);
+    wcsstruct *wcs = impl->wcs[impl->next];
+    
+    wcs->naxis = wcsPrm->naxis;
+    wcs->naxisn[0] = naxis1;
+    wcs->naxisn[1] = naxis2;
+    
+    for (int i = 0; i != wcs->naxis; ++i) {
+        strncpy(wcs->ctype[i], wcsPrm->ctype[i], sizeof(wcs->ctype[i]) - 1);
+        strncpy(wcs->cunit[i], wcsPrm->cunit[i], sizeof(wcs->cunit[i]) - 1);
+        wcs->crval[i] = wcsPrm->crval[i];
         
+        wcs->cdelt[i] = wcsPrm->cdelt[i];
+        wcs->crpix[i] = wcsPrm->crpix[i];
+        wcs->crder[i] = wcsPrm->crder[i];
+        wcs->csyer[i] = wcsPrm->csyer[i];
+        wcs->crval[i] = wcsPrm->crval[i];
+    }
+    for (int i = 0; i != wcs->naxis*wcs->naxis; ++i) {
+        wcs->cd[i] = wcsPrm->cd[i];
+    }
+    wcs->longpole = wcsPrm->lonpole;
+    wcs->latpole = wcsPrm->latpole;
+    wcs->lat = wcsPrm->lat;
+    wcs->lng = wcsPrm->lng;
+    wcs->equinox = wcsPrm->equinox;
+
+    impl->ndet += nobj;
+    
+    ++impl->next;
+}
+
 }}
