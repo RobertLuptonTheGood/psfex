@@ -1,9 +1,10 @@
-#include "Field.hh"
+#include "lsst/meas/extensions/psfex/Field.hh"
 #include "wcslib/wcs.h"
 #undef PI
 #include "lsst/afw/image/Wcs.h"
 
 extern "C" {
+#include "globals.h"
 #include "context.h"
 #include "prefs.h"
 #include "psf.h"
@@ -150,11 +151,6 @@ Field::addExt(lsst::afw::image::Wcs const& wcs_,
     
     ++impl->next;
 }
-
-extern "C" {
-    void makeit_body(fieldstruct **fields, contextstruct **context, contextstruct **fullcontext, int);
-}
-        
 
 void
 makeit(std::vector<boost::shared_ptr<Field> > &fields_,

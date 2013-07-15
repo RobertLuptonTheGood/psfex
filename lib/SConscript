@@ -2,9 +2,6 @@
 import os
 from lsst.sconsUtils import scripts, targets, env
 
-sourceFiles = ["context.c", "field.c", "misc.c", "poly.c", "prefs.c", "psf.c", "utils.c", "vignet.c",
-               "makeitImpl.c", "homo.c", "fft.c", "pca.c", "xml.c", "diagnostic.c",]
-
-objs = env.SourcesForSharedLibrary([os.path.join("#src", f) for f in sourceFiles] + Glob("#src/*.cc"))
+objs = env.SourcesForSharedLibrary(Glob("#src/*.cc"))
 
 targets["lib"].extend(env.SharedLibrary(env["packageName"], objs, LIBS=env.getLibs("self")))

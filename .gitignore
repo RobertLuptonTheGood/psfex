@@ -22,9 +22,9 @@ src/levmar/Makefile
 src/psfex
 src/wcs/Makefile
 stamp-h1
-python/astromatic/psfex/psfexLib_wrap.*
-python/astromatic/psfex/psfexLib.py
-python/astromatic/psfex/version.py
+python/lsst/meas/extensions/psfex/psfexLib_wrap.*
+python/lsst/meas/extensions/psfex/psfexLib.py
+python/lsst/meas/extensions/psfex/version.py
 
 psfex.xml
 sc*-mod.fits

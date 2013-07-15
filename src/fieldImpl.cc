@@ -1,6 +1,6 @@
 // -*- lsst-C++ -*-
 #include <cstring>
-#include "Field.hh"
+#include "lsst/meas/extensions/psfex/Field.hh"
 
 namespace astromatic { namespace psfex {
 
@@ -41,6 +41,10 @@ Field::Field(std::string const& ident) :
 
 Field::~Field()
 {
+    for (int i = 0; i != impl->next; ++i) {
+        free(impl->wcs[i]);             // psfex's wcs isn't quite the same as ours ...
+        impl->wcs[i] = NULL;            // ... so don't let psfex free it
+    }
     //field_end(impl);
 }
         

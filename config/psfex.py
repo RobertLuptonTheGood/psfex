@@ -1,6 +1,6 @@
 import sys
-import astromatic.psfex.psfexStarSelector
-import astromatic.psfex.psfexPsfDeterminer
+import lsst.meas.extensions.psfex.psfexStarSelector
+import lsst.meas.extensions.psfex.psfexPsfDeterminer
 
 root.calibrate.measurePsf.starSelector.name  = "psfex" if False else "objectSize"
 root.calibrate.measurePsf.psfDeterminer.name = "psfex" if True  else "pca"
@@ -13,3 +13,5 @@ except AttributeError, e:
 
 root.calibrate.measurePsf.starSelector["psfex"].maxFwhmVariability = 0.1
 root.calibrate.measurePsf.starSelector["psfex"].maxbadflag = False
+
+root.calibrate.measurePsf.psfDeterminer["psfex"].spatialOrder = 1

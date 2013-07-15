@@ -40,7 +40,7 @@
 extern "C" {
 #include "vignet.h"
 }
-#include "astromatic/psfex/PsfexPsf.h"
+#include "lsst/meas/extensions/psfex/PsfexPsf.h"
 #include "lsst/meas/algorithms/KernelPsfFactory.h"
 
 namespace astromatic {
@@ -421,7 +421,7 @@ namespace {
 
 /************************************************************************************************************/
 
-std::string PsfexPsf::getPythonModule() const { return "astromatic.psfex"; }
+std::string PsfexPsf::getPythonModule() const { return "lsst.meas.extensions.psfex"; }
 
 std::string PsfexPsf::getPersistenceName() const { return getPsfexPsfPersistenceName(); }
 

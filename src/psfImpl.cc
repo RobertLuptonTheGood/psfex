@@ -1,5 +1,5 @@
 // -*- lsst-C++ -*-
-#include "psf.hh"
+#include "lsst/meas/extensions/psfex/psf.hh"
 #include "ndarray.h"
 
 #define RETURN_IMAGE_FIELD(NAME, CNAME, SIZE) \
@@ -100,9 +100,9 @@ Set::trimMemory() const
 }
 
 void
-Set::finiSample(Sample const& sample, float prof_accuracy)
+Set::finiSample(Sample const& sample)
 {
-    make_weights(impl, prof_accuracy, sample.impl);
+    make_weights(impl, sample.impl);
     recenter_sample(sample.impl, impl, sample._fluxrad);
 }
 
